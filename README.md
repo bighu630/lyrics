@@ -1,6 +1,7 @@
 # 智能歌词显示系统
 
 一个基于 Hyprland 的实时歌词显示系统，能够自动获取当前播放的媒体信息，通过 AI 分析判断是否为歌曲，然后获取歌词并在透明窗口中实时显示。
+
 ![image](https://github.com/user-attachments/assets/84d96bf3-fcd6-48f1-8cd7-864d0003861a)
 
 
