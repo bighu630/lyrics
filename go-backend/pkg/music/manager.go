@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"fmt"
+	"go-backend/pkg/lrclib"
 	"log"
 )
 
@@ -10,6 +11,8 @@ import (
 type Provider string
 
 const (
+	// ProviderLRCLib LRCLib歌词库
+	ProviderLRCLib Provider = "lrclib"
 	// ProviderNetEase 网易云音乐
 	ProviderNetEase Provider = "netease"
 	// ProviderQQMusic QQ音乐 (未来实现)
@@ -84,6 +87,60 @@ func (m *Manager) GetLyrics(ctx context.Context, songID string) (string, error) 
 	}
 
 	return "", fmt.Errorf("all providers failed, last error: %w", lastErr)
+}
+
+// GetLyricsByInfo 根据歌曲信息直接获取歌词（封装搜索+获取歌词）
+func (m *Manager) GetLyricsByInfo(ctx context.Context, title, artist string, duration float64) (string, error) {
+	if len(m.providers) == 0 {
+		return "", fmt.Errorf("no music providers available")
+	}
+
+	var lastErr error
+	for i, provider := range m.providers {
+		log.Printf("INFO: Trying to get lyrics for '%s - %s' (duration: %.2fs) from provider %s (%d/%d)",
+			title, artist, duration, provider.GetProviderName(), i+1, len(m.providers))
+
+		// 检查是否为LRCLib客户端并支持带时长的歌词查询
+		if lrcClient, ok := provider.(*lrclib.Client); ok && duration > 0 {
+			lyrics, err := lrcClient.GetLyricsByInfo(ctx, title, artist, duration)
+			if err == nil {
+				log.Printf("INFO: Successfully got lyrics from LRCLib using duration")
+				return lyrics, nil
+			}
+			log.Printf("WARN: LRCLib with duration failed: %v", err)
+			lastErr = err
+			continue
+		}
+
+		// 普通API流程：搜索歌曲
+		songID, err := provider.SearchSong(ctx, title, artist)
+		if err != nil {
+			log.Printf("WARN: Provider %s search failed: %v", provider.GetProviderName(), err)
+			lastErr = err
+			continue
+		}
+
+		// 获取歌词
+		lyrics, err := provider.GetLyrics(ctx, songID)
+		if err != nil {
+			log.Printf("WARN: Provider %s get lyrics failed for ID %s: %v", provider.GetProviderName(), songID, err)
+			lastErr = err
+			continue
+		}
+
+		log.Printf("INFO: Successfully got lyrics for '%s - %s' from provider %s", title, artist, provider.GetProviderName())
+		return lyrics, nil
+	}
+
+	return "", fmt.Errorf("all providers failed to get lyrics for '%s - %s', last error: %w", title, artist, lastErr)
+}
+
+// GetProviderName 获取管理器名称（实现MusicAPI接口）
+func (m *Manager) GetProviderName() string {
+	if m.primary != nil {
+		return fmt.Sprintf("Manager[Primary: %s]", m.primary.GetProviderName())
+	}
+	return "Manager[No Providers]"
 }
 
 // GetPrimaryProvider 获取主提供商

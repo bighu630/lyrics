@@ -2,6 +2,7 @@ package music
 
 import (
 	"fmt"
+	"go-backend/pkg/lrclib"
 	"go-backend/pkg/netease"
 	"go-backend/pkg/qqmusic"
 	"log"
@@ -10,6 +11,9 @@ import (
 // CreateProvider 创建音乐提供商客户端
 func CreateProvider(provider Provider) (MusicAPI, error) {
 	switch provider {
+	case ProviderLRCLib:
+		log.Printf("INFO: Creating LRCLib client")
+		return lrclib.NewClient(), nil
 	case ProviderNetEase:
 		log.Printf("INFO: Creating NetEase music client")
 		return netease.NewClient(), nil
@@ -29,7 +33,8 @@ func CreateDefaultManager() (*Manager, error) {
 
 	// 按优先级添加提供商
 	providerTypes := []Provider{
-		ProviderNetEase, // 网易云音乐作为主要提供商
+		ProviderLRCLib,  // LRCLib作为最高优先级提供商
+		ProviderNetEase, // 网易云音乐作为次要提供商
 		// ProviderQQMusic, // QQ音乐作为备选（目前未完全实现）
 	}
 

@@ -21,8 +21,11 @@ type App struct {
 	lyricsProvider *lyrics.Provider
 	currentSong    string
 	mutex          sync.Mutex
-	ipcFlag        chan struct{}
-	ipcRunning     bool
+
+	// 歌词调度器控制
+	schedulerMutex  sync.Mutex
+	schedulerCancel context.CancelFunc
+	schedulerActive bool
 }
 
 func New(cfg *config.Config) *App {
@@ -40,7 +43,6 @@ func New(cfg *config.Config) *App {
 		cfg:            cfg,
 		ipcServer:      ipc.NewServer(cfg.SocketPath),
 		lyricsProvider: lyricsProvider,
-		ipcFlag:        make(chan struct{}),
 	}
 }
 func (a *App) Run() {
@@ -83,7 +85,11 @@ func (a *App) updateSongInfo() {
 
 	a.ipcServer.Broadcast(fmt.Sprintf("... Searching for lyrics for %s ...", songIdentifier))
 
-	lyricsText, err := a.lyricsProvider.GetLyrics(context.Background(), songIdentifier)
+	// 创建可取消的上下文，确保如果切换歌曲，可以取消未完成的歌词获取
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel() // 确保资源最终被释放
+
+	lyricsText, err := a.lyricsProvider.GetLyrics(ctx, songIdentifier)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get lyrics")
 		a.ipcServer.Broadcast(fmt.Sprintf("Error getting lyrics: %v", err))
@@ -120,17 +126,19 @@ func getLyricIndexAtTime(lines []lyrics.Line, t float64) int {
 	return result
 }
 func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	// 使用专门的锁保护调度器状态
+	a.schedulerMutex.Lock()
+	defer a.schedulerMutex.Unlock()
 
-	// 停止之前的歌词调度器
-	if a.ipcRunning {
-		select {
-		case a.ipcFlag <- struct{}{}:
-		default:
-		}
-		// 等待之前的调度器停止
-		time.Sleep(100 * time.Millisecond)
+	// 停止之前的歌词调度器（如果有）
+	if a.schedulerCancel != nil {
+		log.Info().Msg("Stopping previous lyric scheduler")
+		a.schedulerCancel()
+		a.schedulerCancel = nil
+
+		// 为了确保旧调度器有时间退出，等待一小段时间
+		// 这个短暂等待不会影响用户体验，但确保资源正确释放
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	lines := lyrics.ParseLRC(lrc)
@@ -142,10 +150,30 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 
 	log.Info().Int("lines_count", len(lines)).Msg("Starting lyric scheduler")
 
+	// 创建新的上下文和取消函数
+	ctx, cancel := context.WithCancel(context.Background())
+	a.schedulerCancel = cancel
+	a.schedulerActive = true
+
 	go func() {
-		a.ipcRunning = true
+		// 防止goroutine泄漏
+		// 通过闭包我们已经捕获了cancel函数和上下文
+
 		defer func() {
-			a.ipcRunning = false
+			a.schedulerMutex.Lock()
+			a.schedulerActive = false
+			// 只有当这是最新的调度器时才清除（通过闭包捕获的方式进行比较）
+			select {
+			case <-ctx.Done():
+				// 如果上下文已被取消，则说明这个调度器被停止了
+				log.Debug().Msg("Cleaning up cancelled scheduler")
+			default:
+				// 如果上下文尚未取消，说明这是最新的调度器被自然结束（如歌曲结束）
+				// 这时才清除schedulerCancel引用
+				log.Debug().Msg("Cleaning up finished scheduler")
+				a.schedulerCancel = nil
+			}
+			a.schedulerMutex.Unlock()
 			log.Info().Msg("Lyric scheduler stopped")
 		}()
 
@@ -225,8 +253,8 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 					return
 				}
 
-			case <-a.ipcFlag:
-				log.Info().Msg("Lyric scheduler received stop signal")
+			case <-ctx.Done():
+				log.Info().Msg("Lyric scheduler cancelled")
 				return
 			}
 		}

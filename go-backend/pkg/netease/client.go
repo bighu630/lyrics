@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // NeteaseSearchResponse 网易云搜索API响应
@@ -39,15 +40,21 @@ type NeteaseLyricResponse struct {
 
 // Client 网易云音乐客户端
 type Client struct {
-	httpClient *http.Client
-	cookie     string
+	httpClient     *http.Client
+	cookie         string
+	requestTimeout time.Duration
+	maxRetries     int
 }
 
 // NewClient 创建新的网易云音乐客户端
 func NewClient() *Client {
 	return &Client{
-		httpClient: &http.Client{},
-		cookie:     os.Getenv("NETEASE_COOKIE"),
+		httpClient: &http.Client{
+			Timeout: 5 * time.Second, // 设置较短的5秒超时
+		},
+		cookie:         os.Getenv("NETEASE_COOKIE"),
+		requestTimeout: 5 * time.Second,
+		maxRetries:     3, // 最多重试3次
 	}
 }
 
@@ -56,12 +63,31 @@ func (c *Client) GetProviderName() string {
 	return "NetEase Cloud Music"
 }
 
+// createTimeoutContext 创建带超时的上下文
+func (c *Client) createTimeoutContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	// 如果传入的上下文已有超时，使用较短的超时
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeLeft := time.Until(deadline)
+		if timeLeft < c.requestTimeout {
+			// 使用现有上下文的较短超时
+			return ctx, func() {}
+		}
+	}
+	// 创建新的超时上下文
+	return context.WithTimeout(ctx, c.requestTimeout)
+}
+
 // SearchSong 搜索歌曲
 func (c *Client) SearchSong(ctx context.Context, title, artist string) (string, error) {
+	// 创建带超时的上下文
+	timeoutCtx, cancel := c.createTimeoutContext(ctx)
+	defer cancel()
+
 	searchURL := fmt.Sprintf("https://music.163.com/api/search/get/web?csrf_token=hlpretag&hlposttag=&s=%s&type=1&limit=100", url.QueryEscape(title))
 	log.Printf("INFO: [NetEase] Searching for song with URL: %s", searchURL)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
+	req, err := http.NewRequestWithContext(timeoutCtx, "GET", searchURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create search request: %w", err)
 	}
@@ -71,15 +97,12 @@ func (c *Client) SearchSong(ctx context.Context, title, artist string) (string, 
 		req.Header.Set("Cookie", c.cookie)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// 使用带重试的请求
+	resp, err := c.doRequestWithRetry(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send search request: %w", err)
+		return "", fmt.Errorf("search request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("search API request failed with status %d", resp.StatusCode)
-	}
 
 	var searchResp NeteaseSearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
@@ -100,10 +123,14 @@ func (c *Client) SearchSong(ctx context.Context, title, artist string) (string, 
 
 // GetLyrics 获取歌词
 func (c *Client) GetLyrics(ctx context.Context, songID string) (string, error) {
+	// 创建带超时的上下文
+	timeoutCtx, cancel := c.createTimeoutContext(ctx)
+	defer cancel()
+
 	lyricURL := fmt.Sprintf("http://music.163.com/api/song/lyric?os=pc&id=%s&lv=-1&kv=-1&tv=-1", songID)
 	log.Printf("INFO: [NetEase] Fetching lyrics with URL: %s", lyricURL)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", lyricURL, nil)
+	req, err := http.NewRequestWithContext(timeoutCtx, "GET", lyricURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create lyric request: %w", err)
 	}
@@ -113,15 +140,12 @@ func (c *Client) GetLyrics(ctx context.Context, songID string) (string, error) {
 		req.Header.Set("Cookie", c.cookie)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// 使用带重试的请求
+	resp, err := c.doRequestWithRetry(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send lyric request: %w", err)
+		return "", fmt.Errorf("lyric request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("lyric API request failed with status %d", resp.StatusCode)
-	}
 
 	var lyricResp NeteaseLyricResponse
 	if err := json.NewDecoder(resp.Body).Decode(&lyricResp); err != nil {
@@ -210,4 +234,47 @@ func normalizeString(s string) string {
 func containsIgnoreCase(s1, s2 string) bool {
 	norm1, norm2 := normalizeString(s1), normalizeString(s2)
 	return strings.Contains(norm1, norm2) || strings.Contains(norm2, norm1)
+}
+
+// doRequestWithRetry 执行HTTP请求并在失败时重试
+func (c *Client) doRequestWithRetry(req *http.Request) (*http.Response, error) {
+	var (
+		resp    *http.Response
+		err     error
+		retries = 0
+	)
+
+	for retries <= c.maxRetries {
+		if retries > 0 {
+			log.Printf("INFO: [NetEase] Retrying request to %s (attempt %d/%d)", req.URL, retries, c.maxRetries)
+			// 在重试前添加短暂的延迟，避免立即重试
+			time.Sleep(time.Duration(retries*500) * time.Millisecond)
+		}
+
+		// 创建请求的副本，因为原始请求可能已被消耗
+		reqCopy := req.Clone(req.Context())
+		resp, err = c.httpClient.Do(reqCopy)
+
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return resp, nil // 成功，返回响应
+		}
+
+		if err != nil {
+			log.Printf("WARN: [NetEase] Request failed: %v (attempt %d/%d)", err, retries+1, c.maxRetries)
+		} else {
+			log.Printf("WARN: [NetEase] Request returned status %d (attempt %d/%d)", resp.StatusCode, retries+1, c.maxRetries)
+			resp.Body.Close()
+		}
+
+		retries++
+		if retries > c.maxRetries {
+			break
+		}
+	}
+
+	// 所有重试都失败了
+	if err != nil {
+		return nil, fmt.Errorf("request failed after %d attempts: %w", retries, err)
+	}
+	return nil, fmt.Errorf("request failed after %d attempts with status %d", retries, resp.StatusCode)
 }

@@ -1,6 +1,7 @@
 package player
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 	"regexp"
@@ -128,6 +129,57 @@ func getCurrentPlayTimeFromPlayerctl() (float64, error) {
 	return seconds, nil
 }
 
+// getCurrentDurationFromMPC 从MPC获取歌曲总时长
+func getCurrentDurationFromMPC() (float64, error) {
+	cmd := exec.Command("mpc", "status", "-f", "")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// 查找包含时间信息的行，格式通常是 "[playing] #1/1   0:15/3:42 (7%)"
+		if strings.Contains(line, "/") && (strings.Contains(line, "[playing]") || strings.Contains(line, "[paused]")) {
+			// 使用正则表达式提取时间，格式如 "3:21/4:34"
+			re := regexp.MustCompile(`(\d+:\d+)/(\d+:\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) >= 3 {
+				totalTime := matches[2]
+				seconds := parseTimeToSeconds(totalTime)
+				log.Printf("DEBUG: MPC total duration: %s -> %.2f seconds", totalTime, seconds)
+				return seconds, nil
+			}
+		}
+	}
+
+	return 0, nil
+}
+
+// getCurrentDurationFromPlayerctl 从playerctl获取歌曲总时长
+func getCurrentDurationFromPlayerctl() (float64, error) {
+	out, err := exec.Command("playerctl", "metadata", "mpris:length").Output()
+	if err != nil {
+		return 0, err
+	}
+
+	// playerctl返回的是微秒，需要转换为秒
+	microseconds := strings.TrimSpace(string(out))
+	if microseconds == "" {
+		return 0, fmt.Errorf("empty duration from playerctl")
+	}
+
+	us, err := strconv.ParseInt(microseconds, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	seconds := float64(us) / 1000000.0
+	log.Printf("DEBUG: Playerctl total duration: %.2f seconds", seconds)
+	return seconds, nil
+}
+
 // GetCurrentSong 获取当前歌曲，优先使用MPC，如果MPC暂停则使用playerctl
 func GetCurrentSong() (string, error) {
 	// 首先尝试MPC
@@ -171,4 +223,29 @@ func GetCurrentPlayTime() float64 {
 
 	log.Printf("DEBUG: Using playerctl for current time: %.2f", time)
 	return time
+}
+
+// GetCurrentDuration 获取当前歌曲总时长，优先使用MPC，如果MPC不可用则使用playerctl
+func GetCurrentDuration() float64 {
+	// 首先尝试MPC
+	mpcStatus := getMPCStatus()
+
+	if mpcStatus == MPCStatusPlaying || mpcStatus == MPCStatusPaused {
+		duration, err := getCurrentDurationFromMPC()
+		if err == nil && duration > 0 {
+			log.Printf("DEBUG: Using MPC for duration: %.2f", duration)
+			return duration
+		}
+		log.Printf("WARN: MPC failed to get duration: %v", err)
+	}
+
+	// MPC不可用或出错时，使用playerctl
+	duration, err := getCurrentDurationFromPlayerctl()
+	if err != nil {
+		log.Printf("WARN: Playerctl failed to get duration: %v", err)
+		return 0
+	}
+
+	log.Printf("DEBUG: Using playerctl for duration: %.2f", duration)
+	return duration
 }

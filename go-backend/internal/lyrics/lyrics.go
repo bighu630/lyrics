@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-backend/internal/player"
 	"go-backend/pkg/ai"
 	"go-backend/pkg/ai/gemini"
 	"go-backend/pkg/music"
@@ -30,9 +31,10 @@ type Provider struct {
 }
 
 type SongInfo struct {
-	Title  string `json:"title"`
-	Artist string `json:"artist"`
-	IsSong bool   `json:"is_song"`
+	Title    string  `json:"title"`
+	Artist   string  `json:"artist"`
+	Duration float64 `json:"duration"` // 歌曲时长（秒）
+	IsSong   bool    `json:"is_song"`
 }
 
 func formatQuerySong(title string) string {
@@ -91,16 +93,14 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	}
 	log.Printf("INFO: Cache MISS for %s. Fetching from API.", songIdentifier)
 
-	// 使用音乐管理器搜索歌曲
-	songID, err := p.musicManager.SearchSong(ctx, songInfo.Title, songInfo.Artist)
-	if err != nil {
-		return "", fmt.Errorf("failed to find song ID for '%s': %w", songInfo.Title, err)
-	}
+	// 获取歌曲时长
+	songInfo.Duration = player.GetCurrentDuration()
+	log.Printf("INFO: Got song duration: %.2f seconds for '%s - %s'", songInfo.Duration, songInfo.Title, songInfo.Artist)
 
-	// 获取歌词
-	lyrics, err := p.musicManager.GetLyrics(ctx, songID)
+	// 使用音乐管理器直接获取歌词（封装了搜索+获取歌词的过程）
+	lyrics, err := p.musicManager.GetLyricsByInfo(ctx, songInfo.Title, songInfo.Artist, songInfo.Duration)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch lyrics for ID %s: %w", songID, err)
+		return "", fmt.Errorf("failed to get lyrics for '%s - %s': %w", songInfo.Title, songInfo.Artist, err)
 	}
 
 	log.Printf("INFO: Saving new lyrics to cache file: %s", cacheFilepath)

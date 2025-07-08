@@ -24,7 +24,7 @@ graph TD
     Backend[Go 后端服务]
     MediaGet[媒体信息获取]
     AIAnalysis[AI 歌曲分析\nGemini API]
-    LyricsGet[歌词获取\n网易云 API]
+    LyricsGet[歌词获取\nLRCLib/网易云 API]
     LRCParser[LRC 解析器\n时间同步]
     IPCServer[IPC 服务器\n实时推送]
 
@@ -42,6 +42,7 @@ graph TD
     MediaGet --> AIAnalysis
     AIAnalysis <--> GeminiAPI
     AIAnalysis --> LyricsGet
+    LyricsGet <--> LRCLibAPI[LRCLib API]
     LyricsGet <--> NeteaseAPI
     LyricsGet --> Cache
     Cache --> LRCParser
@@ -77,11 +78,13 @@ graph TD
 
 ### 3. 歌词获取与缓存
 - 使用通用音乐API接口支持多个音乐平台
-- 主要使用网易云音乐API，支持自动故障转移
+- 优先使用LRCLib API，提供高质量的LRC歌词
+- 次级使用网易云音乐API，支持自动故障转移
 - 未来可扩展支持QQ音乐、酷狗音乐等平台
 - 支持多种歌词格式 (LRC 带时间戳格式)
 - 自动缓存歌词文件到本地 `lyrics_cache/` 目录
 - 避免重复下载，提高响应速度
+- 智能歌词匹配算法，基于标题、艺术家和歌曲时长
 
 ### 4. LRC 歌词解析
 - 解析 LRC 格式的时间戳和歌词内容
@@ -795,5 +798,11 @@ make test  # 如果有测试的话
 ---
 
 **享受您的智能歌词体验！** 🎵
+
+## 📚 相关文档
+
+- [音乐API重构说明](MUSIC_API_REFACTORING.md)
+- [LRCLib歌词源集成](LRCLIB_INTEGRATION.md)
+- [README-GUI说明](README-GUI.md)
 
 *如果这个项目对您有帮助，请考虑给个 ⭐ Star！*

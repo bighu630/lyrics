@@ -16,6 +16,14 @@ type MusicAPI interface {
 	GetProviderName() string
 }
 
+// MusicManager 音乐管理器接口（扩展接口，包含组合操作）
+type MusicManager interface {
+	MusicAPI
+
+	// GetLyricsByInfo 根据歌曲信息直接获取歌词（封装搜索+获取歌词）
+	GetLyricsByInfo(ctx context.Context, title, artist string, duration float64) (string, error)
+}
+
 // LyricLine 歌词行结构
 type LyricLine struct {
 	Time float64 // 时间戳（秒）

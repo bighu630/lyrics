@@ -99,7 +99,7 @@ private:
     GtkWidget *label = nullptr;
     bool running = true;
     std::string current_lyrics = "Waiting for lyrics...";
-    int font_size = 22; // 默认字体大小
+    int font_size = 18; // 默认字体大小
     const int MIN_FONT_SIZE = 12; // 最小字体大小
     const int MAX_FONT_SIZE = 48; // 最大字体大小
     const int FONT_SIZE_STEP = 2; // 每次调整的步长

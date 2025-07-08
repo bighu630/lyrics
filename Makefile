@@ -36,25 +36,39 @@ LDFLAGS := `pkg-config --libs gtk4`
 
 # --- Build Targets ---
 
-.PHONY: all backend gui clean run-backend run-gui install install-user uninstall uninstall-user help
+.PHONY: all backend gui clean run-backend run-gui install install-user install-backend install-gui install-backend-user install-gui-user uninstall uninstall-user uninstall-backend uninstall-gui uninstall-backend-user uninstall-gui-user help
 
 all: backend gui
 	@echo "Build complete for all targets."
 
 help:
 	@echo "Available targets:"
-	@echo "  all             - Build both the backend and the GUI (default)"
-	@echo "  backend         - Build the Go backend"
-	@echo "  gui             - Build the C++ GUI"
-	@echo "  run-backend     - Build and run the Go backend"
-	@echo "  run-gui         - Build and run the C++ GUI (window mode - default)"
-	@echo "  run-console     - Build and run the C++ GUI (console mode)"
-	@echo "  install         - Install binaries to system directories (requires sudo)"
-	@echo "  install-user    - Install binaries to user directory (~/.local/bin)"
-	@echo "  uninstall       - Remove installed binaries from system"
-	@echo "  uninstall-user  - Remove installed binaries from user directory"
-	@echo "  clean           - Remove all build artifacts"
-	@echo "  help            - Show this help message"
+	@echo "  all                - Build both the backend and the GUI (default)"
+	@echo "  backend            - Build the Go backend"
+	@echo "  gui                - Build the C++ GUI"
+	@echo "  run-backend        - Build and run the Go backend"
+	@echo "  run-gui            - Build and run the C++ GUI (window mode - default)"
+	@echo "  run-console        - Build and run the C++ GUI (console mode)"
+	@echo ""
+	@echo "Installation targets:"
+	@echo "  install            - Install both binaries to system directories (requires sudo)"
+	@echo "  install-backend    - Install only backend to system directories (requires sudo)"
+	@echo "  install-gui        - Install only GUI to system directories (requires sudo)"
+	@echo "  install-user       - Install both binaries to user directory (~/.local/bin)"
+	@echo "  install-backend-user - Install only backend to user directory"
+	@echo "  install-gui-user   - Install only GUI to user directory"
+	@echo ""
+	@echo "Uninstallation targets:"
+	@echo "  uninstall          - Remove all installed binaries from system"
+	@echo "  uninstall-backend  - Remove only backend from system"
+	@echo "  uninstall-gui      - Remove only GUI from system"
+	@echo "  uninstall-user     - Remove all binaries from user directory"
+	@echo "  uninstall-backend-user - Remove only backend from user directory"
+	@echo "  uninstall-gui-user - Remove only GUI from user directory"
+	@echo ""
+	@echo "Other targets:"
+	@echo "  clean              - Remove all build artifacts"
+	@echo "  help               - Show this help message"
 
 # --- Go Backend Targets ---
 
@@ -134,6 +148,48 @@ install: all
 	@echo "  $(CPP_BINARY_NAME)    - Start the GUI client"
 	@echo "  $(CPP_BINARY_NAME) -c - Start in console mode"
 
+install-backend: backend
+	@echo "仅安装后端到系统目录..."
+	@echo "安装到: $(INSTALL_BIN_DIR)"
+	@if [ ! -w "$(INSTALL_BIN_DIR)" ] && [ ! -w "$$(dirname $(INSTALL_BIN_DIR))" ]; then \
+		echo "✗ 权限不足。请使用 'sudo make install-backend'"; \
+		exit 1; \
+	fi
+	@mkdir -p $(INSTALL_BIN_DIR)
+	@if [ -f "$(GO_TARGET)" ]; then \
+		if cp $(GO_TARGET) $(INSTALL_BACKEND) && chmod +x $(INSTALL_BACKEND); then \
+			echo "✓ 已安装 $(GO_BINARY_NAME) 到 $(INSTALL_BACKEND)"; \
+		else \
+			echo "✗ 安装 $(GO_BINARY_NAME) 失败"; \
+			exit 1; \
+		fi \
+	else \
+		echo "✗ 后端二进制文件未找到。请先运行 'make backend'"; \
+		exit 1; \
+	fi
+	@echo "后端安装完成！"
+
+install-gui: gui
+	@echo "仅安装前端到系统目录..."
+	@echo "安装到: $(INSTALL_BIN_DIR)"
+	@if [ ! -w "$(INSTALL_BIN_DIR)" ] && [ ! -w "$$(dirname $(INSTALL_BIN_DIR))" ]; then \
+		echo "✗ 权限不足。请使用 'sudo make install-gui'"; \
+		exit 1; \
+	fi
+	@mkdir -p $(INSTALL_BIN_DIR)
+	@if [ -f "$(CPP_TARGET)" ]; then \
+		if cp $(CPP_TARGET) $(INSTALL_GUI) && chmod +x $(INSTALL_GUI); then \
+			echo "✓ 已安装 $(CPP_BINARY_NAME) 到 $(INSTALL_GUI)"; \
+		else \
+			echo "✗ 安装 $(CPP_BINARY_NAME) 失败"; \
+			exit 1; \
+		fi \
+	else \
+		echo "✗ 前端二进制文件未找到。请先运行 'make gui'"; \
+		exit 1; \
+	fi
+	@echo "前端安装完成！"
+
 install-user: all
 	@echo "Installing binaries to user directory..."
 	@echo "Installing to: $(USER_BIN_DIR)"
@@ -171,6 +227,48 @@ install-user: all
 	@echo "  $(CPP_BINARY_NAME)    - Start the GUI client"
 	@echo "  $(CPP_BINARY_NAME) -c - Start in console mode"
 
+install-backend-user: backend
+	@echo "仅安装后端到用户目录..."
+	@echo "安装到: $(USER_BIN_DIR)"
+	@mkdir -p $(USER_BIN_DIR)
+	@if [ -f "$(GO_TARGET)" ]; then \
+		if cp $(GO_TARGET) $(USER_INSTALL_BACKEND) && chmod +x $(USER_INSTALL_BACKEND); then \
+			echo "✓ 已安装 $(GO_BINARY_NAME) 到 $(USER_INSTALL_BACKEND)"; \
+		else \
+			echo "✗ 安装 $(GO_BINARY_NAME) 失败"; \
+			exit 1; \
+		fi \
+	else \
+		echo "✗ 后端二进制文件未找到。请先运行 'make backend'"; \
+		exit 1; \
+	fi
+	@echo "用户目录后端安装完成！"
+	@echo ""
+	@echo "注意：确保 $(USER_BIN_DIR) 在您的 PATH 中:"
+	@echo "  echo 'export PATH=\"\$$HOME/.local/bin:\$$PATH\"' >> ~/.bashrc"
+	@echo "  echo 'export PATH=\"\$$HOME/.local/bin:\$$PATH\"' >> ~/.zshrc"
+
+install-gui-user: gui
+	@echo "仅安装前端到用户目录..."
+	@echo "安装到: $(USER_BIN_DIR)"
+	@mkdir -p $(USER_BIN_DIR)
+	@if [ -f "$(CPP_TARGET)" ]; then \
+		if cp $(CPP_TARGET) $(USER_INSTALL_GUI) && chmod +x $(USER_INSTALL_GUI); then \
+			echo "✓ 已安装 $(CPP_BINARY_NAME) 到 $(USER_INSTALL_GUI)"; \
+		else \
+			echo "✗ 安装 $(CPP_BINARY_NAME) 失败"; \
+			exit 1; \
+		fi \
+	else \
+		echo "✗ 前端二进制文件未找到。请先运行 'make gui'"; \
+		exit 1; \
+	fi
+	@echo "用户目录前端安装完成！"
+	@echo ""
+	@echo "注意：确保 $(USER_BIN_DIR) 在您的 PATH 中:"
+	@echo "  echo 'export PATH=\"\$$HOME/.local/bin:\$$PATH\"' >> ~/.bashrc"
+	@echo "  echo 'export PATH=\"\$$HOME/.local/bin:\$$PATH\"' >> ~/.zshrc"
+
 uninstall:
 	@echo "Removing installed binaries..."
 	@if [ -f "$(INSTALL_BACKEND)" ]; then \
@@ -187,6 +285,26 @@ uninstall:
 	fi
 	@echo "Uninstall complete!"
 
+uninstall-backend:
+	@echo "仅卸载后端..."
+	@if [ -f "$(INSTALL_BACKEND)" ]; then \
+		rm -f $(INSTALL_BACKEND); \
+		echo "✓ 已移除 $(INSTALL_BACKEND)"; \
+	else \
+		echo "- 后端未安装"; \
+	fi
+	@echo "后端卸载完成！"
+
+uninstall-gui:
+	@echo "仅卸载前端..."
+	@if [ -f "$(INSTALL_GUI)" ]; then \
+		rm -f $(INSTALL_GUI); \
+		echo "✓ 已移除 $(INSTALL_GUI)"; \
+	else \
+		echo "- 前端未安装"; \
+	fi
+	@echo "前端卸载完成！"
+
 uninstall-user:
 	@echo "Removing user-installed binaries..."
 	@if [ -f "$(USER_INSTALL_BACKEND)" ]; then \
@@ -202,6 +320,26 @@ uninstall-user:
 		echo "- GUI not installed in user directory"; \
 	fi
 	@echo "User uninstall complete!"
+
+uninstall-backend-user:
+	@echo "仅从用户目录卸载后端..."
+	@if [ -f "$(USER_INSTALL_BACKEND)" ]; then \
+		rm -f $(USER_INSTALL_BACKEND); \
+		echo "✓ 已移除 $(USER_INSTALL_BACKEND)"; \
+	else \
+		echo "- 后端未在用户目录安装"; \
+	fi
+	@echo "用户目录后端卸载完成！"
+
+uninstall-gui-user:
+	@echo "仅从用户目录卸载前端..."
+	@if [ -f "$(USER_INSTALL_GUI)" ]; then \
+		rm -f $(USER_INSTALL_GUI); \
+		echo "✓ 已移除 $(USER_INSTALL_GUI)"; \
+	else \
+		echo "- 前端未在用户目录安装"; \
+	fi
+	@echo "用户目录前端卸载完成！"
 
 # --- Cleanup ---
 
