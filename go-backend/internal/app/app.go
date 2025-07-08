@@ -30,10 +30,16 @@ func New(cfg *config.Config) *App {
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
+	// 创建歌词提供商
+	lyricsProvider, err := lyrics.NewProvider(cfg.CacheDir, cfg.GeminiAPIKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create lyrics provider")
+	}
+
 	return &App{
 		cfg:            cfg,
 		ipcServer:      ipc.NewServer(cfg.SocketPath),
-		lyricsProvider: lyrics.NewProvider(cfg.CacheDir, cfg.GeminiAPIKey),
+		lyricsProvider: lyricsProvider,
 		ipcFlag:        make(chan struct{}),
 	}
 }

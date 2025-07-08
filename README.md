@@ -76,7 +76,9 @@ graph TD
 - 过滤掉非音乐内容 (视频、播客等)
 
 ### 3. 歌词获取与缓存
-- 使用网易云音乐 API 搜索歌词
+- 使用通用音乐API接口支持多个音乐平台
+- 主要使用网易云音乐API，支持自动故障转移
+- 未来可扩展支持QQ音乐、酷狗音乐等平台
 - 支持多种歌词格式 (LRC 带时间戳格式)
 - 自动缓存歌词文件到本地 `lyrics_cache/` 目录
 - 避免重复下载，提高响应速度
@@ -96,7 +98,9 @@ graph TD
 ### 后端 (Go)
 - **playerctl**: 媒体播放器控制和信息获取
 - **Gemini AI API**: 智能歌曲识别和信息提取
-- **网易云音乐 API**: 歌词数据源
+- **音乐API管理器**: 支持多个音乐平台的统一接口
+- **网易云音乐 API**: 主要歌词数据源
+- **QQ音乐 API**: 备选歌词数据源（开发中）
 - **Unix Domain Socket**: 高性能 IPC 通信
 - **zerolog**: 结构化日志记录
 
@@ -530,7 +534,9 @@ lyrics/
 │   │   └── player/            # 播放器接口 (playerctl)
 │   └── pkg/                   # 外部包
 │       ├── ai/                # AI 客户端 (Gemini)
-│       └── tencent/           # 网易云音乐 API
+│       ├── music/             # 音乐API通用接口和管理器
+│       ├── netease/           # 网易云音乐 API 客户端
+│       └── qqmusic/           # QQ音乐 API 客户端（模板）
 │
 ├── cpp-gui/                   # C++ GTK4 前端
 │   └── main.cpp              # GUI 主程序和 IPC 客户端
@@ -544,8 +550,10 @@ lyrics/
 ├── simple_ipc_reader.sh     # IPC 测试工具
 ├── ipc_reader.sh            # IPC 调试工具
 ├── install-deps.sh          # 依赖安装脚本
+├── check_config.sh          # 配置检查脚本
 ├── README.md                # 主要文档 (本文件)
-└── README-GUI.md            # GUI 详细说明
+├── README-GUI.md            # GUI 详细说明
+└── MUSIC_API_REFACTORING.md # 音乐API重构说明
 
 # 安装后的系统文件位置:
 # /usr/local/bin/lyrics-backend    # 系统安装 (sudo make install)

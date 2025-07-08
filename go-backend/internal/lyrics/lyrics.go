@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"go-backend/pkg/ai"
 	"go-backend/pkg/ai/gemini"
+	"go-backend/pkg/music"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,27 +18,6 @@ import (
 	"time"
 )
 
-type NeteaseSearchResponse struct {
-	Result struct {
-		Songs []struct {
-			ID      int    `json:"id"`
-			Name    string `json:"name"`
-			Artists []struct {
-				Name string `json:"name"`
-			}
-		} `json:"songs"`
-	} `json:"result"`
-}
-
-type NeteaseLyricResponse struct {
-	Lrc struct {
-		Lyric string `json:"lyric"`
-	} `json:"lrc"`
-	Tlyric struct {
-		Lyric string `json:"lyric"`
-	} `json:"tlyric"`
-}
-
 type Line struct {
 	Time float64
 	Text string
@@ -48,6 +26,7 @@ type Line struct {
 type Provider struct {
 	cacheDir     string
 	geminiClient ai.AiInterface
+	musicManager *music.Manager
 }
 
 type SongInfo struct {
@@ -60,24 +39,42 @@ func formatQuerySong(title string) string {
 	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息: {"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。  输入是一个媒体标题，如果标题中包含歌曲信息，请返回符合格式的JSON；否则，返回{"is_song": false}。 请注意，"title" 和 "artist" 必须准确，否则将被视为错误，切记不要任何markdown格式，并将繁体中文转换为简体。 媒体标题是：%s`, title)
 }
 
-func NewProvider(cacheDir, geminiAPIKey string) *Provider {
+func NewProvider(cacheDir, geminiAPIKey string) (*Provider, error) {
+	musicManager, err := music.CreateDefaultManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create music manager: %w", err)
+	}
+
 	return &Provider{
 		cacheDir:     cacheDir,
 		geminiClient: gemini.NewGemini(geminiAPIKey, ""),
-	}
+		musicManager: musicManager,
+	}, nil
 }
 
 func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	rawSongInfo, err := p.geminiClient.HandleText(formatQuerySong(songIdentifier))
-	if err != nil {
-		return "", fmt.Errorf("failed to query Gemini: %w", err)
+	var rawSongInfo string
+	var err error
+	const maxRetries = 3
+	for i := range maxRetries {
+		rawSongInfo, err = p.geminiClient.HandleText(formatQuerySong(songIdentifier))
+		if err == nil {
+			break
+		}
+		log.Printf("WARN: Failed to query Gemini (attempt %d/%d): %v", i+1, maxRetries, err)
+		time.Sleep(1 * time.Second) // Wait a bit before retrying
 	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query Gemini after %d attempts: %w", maxRetries, err)
+	}
+
 	var songInfo SongInfo
-	if err := json.Unmarshal([]byte(rawSongInfo), &songInfo); err != nil {
-		return "", fmt.Errorf("failed to parse Gemini response: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(rawSongInfo), &songInfo); unmarshalErr != nil {
+		return "", fmt.Errorf("failed to parse Gemini response: %w", unmarshalErr)
 	}
 
 	if !songInfo.IsSong {
@@ -88,20 +85,22 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	cacheFilename := sanitizeFilename(songInfo.Title+"-"+songInfo.Artist) + ".lrc"
 	cacheFilepath := filepath.Join(p.cacheDir, cacheFilename)
 
-	if cachedLyrics, err := os.ReadFile(cacheFilepath); err == nil {
+	if cachedLyrics, readErr := os.ReadFile(cacheFilepath); readErr == nil {
 		log.Printf("INFO: Cache HIT. Loading lyrics from %s", cacheFilepath)
 		return string(cachedLyrics), nil
 	}
 	log.Printf("INFO: Cache MISS for %s. Fetching from API.", songIdentifier)
 
-	songID, err := p.searchSongID(ctx, songInfo)
+	// 使用音乐管理器搜索歌曲
+	songID, err := p.musicManager.SearchSong(ctx, songInfo.Title, songInfo.Artist)
 	if err != nil {
 		return "", fmt.Errorf("failed to find song ID for '%s': %w", songInfo.Title, err)
 	}
 
-	lyrics, err := p.fetchNeteaseLyrics(ctx, songID)
+	// 获取歌词
+	lyrics, err := p.musicManager.GetLyrics(ctx, songID)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch lyrics for ID %d: %w", songID, err)
+		return "", fmt.Errorf("failed to fetch lyrics for ID %s: %w", songID, err)
 	}
 
 	log.Printf("INFO: Saving new lyrics to cache file: %s", cacheFilepath)
@@ -110,101 +109,6 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	}
 
 	return lyrics, nil
-}
-
-func (p *Provider) searchSongID(ctx context.Context, si SongInfo) (int, error) {
-	searchURL := fmt.Sprintf("https://music.163.com/api/search/get/web?csrf_token=hlpretag&hlposttag=&s=%s&type=1", url.QueryEscape(si.Title+" "+si.Artist))
-	log.Printf("INFO: Searching for song ID with URL: %s", searchURL)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create search request: %w", err)
-	}
-
-	// 从环境变量获取网易云音乐 Cookie
-	cookie := os.Getenv("NETEASE_COOKIE")
-	if cookie != "" {
-		req.Header.Set("Cookie", cookie)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to send search request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("search API request failed with status %d", resp.StatusCode)
-	}
-
-	var searchResp NeteaseSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return 0, fmt.Errorf("failed to decode search response")
-	}
-
-	if len(searchResp.Result.Songs) == 0 {
-		return 0, fmt.Errorf("no songs found for '%s'", si.Title)
-	}
-	return findByContain(searchResp, si.Artist, si.Title), nil
-}
-
-func (p *Provider) fetchNeteaseLyrics(ctx context.Context, songID int) (string, error) {
-	lyricURL := fmt.Sprintf("http://music.163.com/api/song/lyric?os=pc&id=%d&lv=-1&kv=-1&tv=-1", songID)
-	log.Printf("INFO: Fetching lyrics with URL: %s", lyricURL)
-	req, err := http.NewRequestWithContext(ctx, "GET", lyricURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create lyric request: %w", err)
-	}
-
-	// 从环境变量获取网易云音乐 Cookie
-	cookie := os.Getenv("NETEASE_COOKIE")
-	if cookie != "" {
-		req.Header.Set("Cookie", cookie)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send lyric request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("lyric API request failed with status %d", resp.StatusCode)
-	}
-
-	var lyricResp NeteaseLyricResponse
-	if err := json.NewDecoder(resp.Body).Decode(&lyricResp); err != nil {
-		return "", fmt.Errorf("failed to decode lyric response: %w", err)
-	}
-
-	originalLyrics := lyricResp.Lrc.Lyric
-	translatedLyrics := lyricResp.Tlyric.Lyric
-
-	if originalLyrics == "" {
-		log.Printf("INFO: No lyrics found for song ID %d. It might be instrumental.", songID)
-		return "(Instrumental or no lyrics found)", nil
-	}
-
-	originalLines := parseLyrics(originalLyrics)
-	translatedLines := parseLyrics(translatedLyrics)
-
-	var timestamps []string
-	for t := range originalLines {
-		timestamps = append(timestamps, t)
-	}
-	sort.Strings(timestamps)
-
-	var combinedLyrics strings.Builder
-	for _, t := range timestamps {
-		combinedLyrics.WriteString(fmt.Sprintf("[%s]%s\n", t, originalLines[t]))
-		if translated, ok := translatedLines[t]; ok {
-			combinedLyrics.WriteString(fmt.Sprintf("[%s]%s\n", t, translated))
-		}
-	}
-
-	return strings.TrimSpace(combinedLyrics.String()), nil
 }
 
 func ParseLRC(lrc string) []Line {
@@ -244,52 +148,4 @@ func ParseLRC(lrc string) []Line {
 func sanitizeFilename(name string) string {
 	re := regexp.MustCompile(`[\\/:*?"<>|]`)
 	return re.ReplaceAllString(name, "-")
-}
-
-func parseLyrics(lyricText string) map[string]string {
-	lines := make(map[string]string)
-	re := regexp.MustCompile(`\[(\d{2}:\d{2}\.\d{2,3})\](.*)`)
-	matches := re.FindAllStringSubmatch(lyricText, -1)
-	for _, match := range matches {
-		if len(match) > 2 {
-			time := match[1]
-			text := strings.TrimSpace(match[2])
-			if text != "" {
-				lines[time] = text
-			}
-		}
-	}
-	return lines
-}
-
-func normalizeString(s string) string {
-	// 转换为小写并去除所有空格
-	return strings.ReplaceAll(strings.ToLower(s), " ", "")
-}
-
-func containsIgnoreCase(s1, s2 string) bool {
-	norm1, norm2 := normalizeString(s1), normalizeString(s2)
-	return strings.Contains(norm1, norm2) || strings.Contains(norm2, norm1)
-}
-
-func findByContain(resp NeteaseSearchResponse, targetArtist, targetTitle string) int {
-	for _, song := range resp.Result.Songs {
-		// 判断歌曲名包含关系
-		if !containsIgnoreCase(song.Name, targetTitle) {
-			continue
-		}
-
-		// 判断歌手名包含关系，artists 可能有多个，只要一个满足就算
-		matchedArtist := false
-		for _, artist := range song.Artists {
-			if containsIgnoreCase(artist.Name, targetArtist) {
-				matchedArtist = true
-				break
-			}
-		}
-		if matchedArtist {
-			return song.ID
-		}
-	}
-	return 0
 }

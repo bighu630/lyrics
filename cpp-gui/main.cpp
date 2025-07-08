@@ -22,8 +22,9 @@
 
 // --- Configuration ---
 const char* SOCKET_PATH = "/tmp/lyrics_app.sock";
-const int RECONNECT_DELAY_MS = 3000; // 3 seconds
+const int RECONNECT_DELAY_MS = 5000; // 5 seconds - 增加重连间隔
 const int MAX_RECONNECT_ATTEMPTS = 0; // 0 = infinite retries
+const int SHOW_DISCONNECT_WARNING_AFTER = 3; // 3次重连失败后显示断开警告
 
 // --- Output Interface ---
 class LyricsOutput {
@@ -98,6 +99,10 @@ private:
     GtkWidget *label = nullptr;
     bool running = true;
     std::string current_lyrics = "Waiting for lyrics...";
+    int font_size = 22; // 默认字体大小
+    const int MIN_FONT_SIZE = 12; // 最小字体大小
+    const int MAX_FONT_SIZE = 48; // 最大字体大小
+    const int FONT_SIZE_STEP = 2; // 每次调整的步长
 
     static void on_activate(GtkApplication *app, gpointer user_data) {
         GuiOutput *gui = static_cast<GuiOutput*>(user_data);
@@ -112,14 +117,40 @@ private:
         return TRUE;
     }
 
+    static gboolean on_key_press(GtkWidget *widget, guint keyval, guint keycode, 
+                                 GdkModifierType state, gpointer user_data) {
+        GuiOutput *gui = static_cast<GuiOutput*>(user_data);
+        
+        // 检查是否按下了Ctrl键
+        if (state & GDK_CONTROL_MASK) {
+            if (keyval == GDK_KEY_plus || keyval == GDK_KEY_equal) {
+                // Ctrl + 放大字体
+                gui->increase_font_size();
+                return TRUE;
+            } else if (keyval == GDK_KEY_minus) {
+                // Ctrl - 缩小字体
+                gui->decrease_font_size();
+                return TRUE;
+            }
+        }
+        
+        return FALSE;
+    }
+
     void create_window(GtkApplication *app) {
         std::cout << "[GUI LOG] Creating transparent lyrics window..." << std::endl;
 
         // Create window
         window = gtk_application_window_new(app);
         gtk_window_set_title(GTK_WINDOW(window), "Lyrics Overlay");
-        gtk_window_set_default_size(GTK_WINDOW(window), 800, 120); // 调整窗口宽度适应50字符文本
+        // 50个字符的最大宽度 + 8个字符的额外空间 = 58个字符
+        // 估算字符宽度：约12像素/字符，58 * 12 = 696像素，加上内边距约58个字符 * 12像素 = 696像素
+        gtk_window_set_default_size(GTK_WINDOW(window), 580, 40); // 宽度调整为只比最大宽度大8个字符
         gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
+        
+        // 设置窗口可以接收焦点和键盘事件
+        gtk_widget_set_can_focus(window, TRUE);
+        gtk_widget_set_focusable(window, TRUE);
 
         // Set window class name for window manager identification
         gtk_widget_set_name(window, "lyrics-gui");
@@ -137,25 +168,25 @@ private:
 
         // Set window and label styling using CSS
         GtkCssProvider *css_provider = gtk_css_provider_new();
-        const char *css_data = 
+        std::string css_data = 
             ".lyrics-window { "
-            "  background: rgba(17, 17, 27, 0.1); "  /* Hyprland 深色背景 */
+            "  background: rgba(17, 17, 27, 0.1); "
             "  border-radius: 12px; "
-            "  padding: 16px 24px; "
+            "  padding: 4px 12px; "
             "} "
             ".lyrics-text { "
-            "  color:rgb(80, 232, 204); "  /* 青绿色主色调 */
-            "  font-size: 22px; "
+            "  color:rgb(80, 232, 204); "
+            "  font-size: " + std::to_string(font_size) + "px; "
             "  font-weight: 300; "
-            "  padding: 8px 16px; "
+            "  padding: 2px 8px; "
             "  text-shadow: "
-            "    0 0 12px rgba(80, 232, 204, 0.8), "     /* 主色发光 */
-            "    0 0 24px rgba(80, 232, 204, 0.5), "     /* 中层发光 */
-            "    0 0 36px rgba(80, 232, 204, 0.3), "     /* 外层发光 */
-            "    2px 2px 4px rgba(0, 0, 0, 0.7); "       /* 黑色阴影增强对比 */
+            "    0 0 12px rgba(80, 232, 204, 0.8), "
+            "    0 0 24px rgba(80, 232, 204, 0.5), "
+            "    0 0 36px rgba(80, 232, 204, 0.3), "
+            "    2px 2px 4px rgba(0, 0, 0, 0.7); "
             "}";
 
-        gtk_css_provider_load_from_string(css_provider, css_data);
+        gtk_css_provider_load_from_string(css_provider, css_data.c_str());
         gtk_style_context_add_provider_for_display(
             gtk_widget_get_display(window),
             GTK_STYLE_PROVIDER(css_provider),
@@ -165,6 +196,11 @@ private:
         // Set window child (GTK4 uses gtk_window_set_child instead of gtk_container_add)
         gtk_window_set_child(GTK_WINDOW(window), label);
 
+        // 添加键盘事件监听器
+        GtkEventController *key_controller = gtk_event_controller_key_new();
+        gtk_widget_add_controller(window, key_controller);
+        g_signal_connect(key_controller, "key-pressed", G_CALLBACK(on_key_press), this);
+
         // Connect signals
         g_signal_connect(window, "close-request", G_CALLBACK(on_delete_event), this);
 
@@ -172,6 +208,68 @@ private:
         gtk_window_present(GTK_WINDOW(window));
 
         std::cout << "[GUI LOG] Lyrics window created and displayed" << std::endl;
+        std::cout << "[GUI LOG] Font size controls: Ctrl + (increase), Ctrl - (decrease)" << std::endl;
+        std::cout << "[GUI LOG] Current font size: " << font_size << "px" << std::endl;
+    }
+
+    void increase_font_size() {
+        if (font_size < MAX_FONT_SIZE) {
+            font_size += FONT_SIZE_STEP;
+            update_font_and_window_size();
+            std::cout << "[GUI LOG] Font size increased to: " << font_size << std::endl;
+        }
+    }
+
+    void decrease_font_size() {
+        if (font_size > MIN_FONT_SIZE) {
+            font_size -= FONT_SIZE_STEP;
+            update_font_and_window_size();
+            std::cout << "[GUI LOG] Font size decreased to: " << font_size << std::endl;
+        }
+    }
+
+    void update_font_and_window_size() {
+        if (!window || !label) return;
+
+        // 计算新的窗口高度：基础高度 + 字体大小的比例调整
+        int base_height = 40;
+        int height_adjustment = (font_size - 28) * 1.5; // 每增加2px字体，窗口高度增加3px
+        int new_height = base_height + height_adjustment;
+        
+        // 确保窗口高度不小于最小值
+        if (new_height < 30) new_height = 30;
+        
+        // 更新窗口大小
+        gtk_window_set_default_size(GTK_WINDOW(window), 580, new_height);
+        
+        // 更新CSS样式
+        GtkCssProvider *css_provider = gtk_css_provider_new();
+        std::string css_data = 
+            ".lyrics-window { "
+            "  background: rgba(17, 17, 27, 0.1); "
+            "  border-radius: 12px; "
+            "  padding: 4px 12px; "
+            "} "
+            ".lyrics-text { "
+            "  color:rgb(80, 232, 204); "
+            "  font-size: " + std::to_string(font_size) + "px; "
+            "  font-weight: 300; "
+            "  padding: 2px 8px; "
+            "  text-shadow: "
+            "    0 0 12px rgba(80, 232, 204, 0.8), "
+            "    0 0 24px rgba(80, 232, 204, 0.5), "
+            "    0 0 36px rgba(80, 232, 204, 0.3), "
+            "    2px 2px 4px rgba(0, 0, 0, 0.7); "
+            "}";
+
+        gtk_css_provider_load_from_string(css_provider, css_data.c_str());
+        gtk_style_context_add_provider_for_display(
+            gtk_widget_get_display(window),
+            GTK_STYLE_PROVIDER(css_provider),
+            GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+        );
+        
+        g_object_unref(css_provider);
     }
 
 public:
@@ -236,6 +334,7 @@ struct ApplicationState {
     bool running = true;
     bool connected = false;
     int reconnect_attempts = 0;
+    std::chrono::steady_clock::time_point last_reconnect_attempt;
     std::unique_ptr<LyricsOutput> output;
 };
 
@@ -273,6 +372,8 @@ void cleanup_connection(ApplicationState &state) {
         state.ipc_socket_fd = -1;
     }
     state.connected = false;
+    // 重置重连计时器，允许立即尝试重连
+    state.last_reconnect_attempt = std::chrono::steady_clock::time_point{};
 }
 
 bool try_connect_ipc(ApplicationState &state) {
@@ -389,19 +490,37 @@ int main(int argc, char *argv[]) {
                 break;
             }
 
-            state.reconnect_attempts++;
-            state.output->display_status("Attempting to connect to backend (attempt " +
-                                       std::to_string(state.reconnect_attempts) + ")...");
+            // 检查是否到了重连时间
+            auto now = std::chrono::steady_clock::now();
+            if (state.reconnect_attempts == 0 || 
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - state.last_reconnect_attempt).count() >= RECONNECT_DELAY_MS) {
+                
+                state.reconnect_attempts++;
+                state.last_reconnect_attempt = now;
+                state.output->display_status("Attempting to connect to backend (attempt " +
+                                           std::to_string(state.reconnect_attempts) + ")...");
 
-            if (!try_connect_ipc(state)) {
-                state.output->display_status("Failed to connect. Waiting " +
-                                           std::to_string(RECONNECT_DELAY_MS/1000) +
-                                           " seconds before retry...");
-                std::this_thread::sleep_for(std::chrono::milliseconds(RECONNECT_DELAY_MS));
+                if (!try_connect_ipc(state)) {
+                    state.output->display_status("Failed to connect. Will retry in " +
+                                               std::to_string(RECONNECT_DELAY_MS/1000) +
+                                               " seconds...");
+                    
+                    // 多次重连失败后在GUI中显示断开状态
+                    if (state.reconnect_attempts >= SHOW_DISCONNECT_WARNING_AFTER) {
+                        state.output->display_lyrics("Backend disconnected - Retrying...");
+                    }
+                    
+                    // 不在这里sleep，而是在主循环中用时间控制
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 短暂休息避免CPU占用过高
+                    continue;
+                }
+
+                state.output->display_status("Listening for lyrics... (Press Ctrl+C to exit)");
+            } else {
+                // 还没到重连时间，短暂休息
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
             }
-
-            state.output->display_status("Listening for lyrics... (Press Ctrl+C to exit)");
         }
 
         // Setup polling

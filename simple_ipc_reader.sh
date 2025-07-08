@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Simple IPC Reader for Lyrics
-SOCKET_PATH="/tmp/lyrics_app.sock"
+SOCKET_PATH="/tmp/custom_lyrics_app.sock"
 
 # Function to center text
 center_text() {
