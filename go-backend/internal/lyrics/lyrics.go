@@ -8,6 +8,7 @@ import (
 	"go-backend/internal/player"
 	"go-backend/pkg/ai"
 	"go-backend/pkg/ai/gemini"
+	"go-backend/pkg/ai/openai"
 	"go-backend/pkg/music"
 	"log"
 	"os"
@@ -26,7 +27,7 @@ type Line struct {
 
 type Provider struct {
 	cacheDir     string
-	geminiClient ai.AiInterface
+	aiClient     ai.AiInterface
 	musicManager *music.Manager
 }
 
@@ -41,15 +42,22 @@ func formatQuerySong(title string) string {
 	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息: {"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。  输入是一个媒体标题，如果标题中包含歌曲信息，请返回符合格式的JSON；否则，返回{"is_song": false}。 请注意，"title" 和 "artist" 必须准确，否则将被视为错误，切记不要任何markdown格式，并将繁体中文转换为简体。 媒体标题是：%s`, title)
 }
 
-func NewProvider(cacheDir, geminiAPIKey string) (*Provider, error) {
+func NewProvider(cacheDir, moduleName, url, apiKey string) (*Provider, error) {
 	musicManager, err := music.CreateDefaultManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create music manager: %w", err)
 	}
+	var aiClient ai.AiInterface
+
+	if moduleName == "gemini" {
+		aiClient = gemini.NewGemini(apiKey, "")
+	} else {
+		aiClient = openai.NewOpenAi(apiKey, moduleName, url)
+	}
 
 	return &Provider{
 		cacheDir:     cacheDir,
-		geminiClient: gemini.NewGemini(geminiAPIKey, ""),
+		aiClient:     aiClient,
 		musicManager: musicManager,
 	}, nil
 }
@@ -62,7 +70,7 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	var err error
 	const maxRetries = 3
 	for i := range maxRetries {
-		rawSongInfo, err = p.geminiClient.HandleText(formatQuerySong(songIdentifier))
+		rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
 		if err == nil {
 			break
 		}

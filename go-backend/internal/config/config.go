@@ -1,12 +1,12 @@
 package config
 
 import (
-	"bufio"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 const (
@@ -30,94 +30,122 @@ func getDefaultCacheDir() string {
 	return filepath.Join(homeDir, ".cache", "lyrics")
 }
 
-// loadEnvFiles 尝试加载环境变量配置文件
-func loadEnvFiles() {
-	// 获取当前工作目录
-	wd, _ := os.Getwd()
+// TomlConfig TOML配置文件结构
+type TomlConfig struct {
+	App struct {
+		SocketPath    string `toml:"socket_path"`
+		CheckInterval string `toml:"check_interval"`
+		CacheDir      string `toml:"cache_dir"`
+	} `toml:"app"`
 
-	// 按优先级顺序尝试加载配置文件
-	envFiles := []string{
-		".env",                    // 当前目录的 .env 文件
-		".env.local",              // 当前目录的本地环境配置
-		filepath.Join(wd, ".env"), // 工作目录的 .env 文件
-		filepath.Join(os.Getenv("HOME"), ".lyrics.env"), // 用户主目录配置
-	}
-
-	for _, envFile := range envFiles {
-		if _, err := os.Stat(envFile); err == nil {
-			log.Printf("Loading environment variables from: %s", envFile)
-			loadEnvFile(envFile)
-			break // 只加载第一个找到的文件
-		}
-	}
-}
-
-// loadEnvFile 加载指定的环境变量文件
-func loadEnvFile(filename string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		// 跳过空行和注释行
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		// 解析 KEY=VALUE 格式
-		if parts := strings.SplitN(line, "=", 2); len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-
-			// 移除值两边的引号（如果有）
-			if len(value) >= 2 &&
-				((value[0] == '"' && value[len(value)-1] == '"') ||
-					(value[0] == '\'' && value[len(value)-1] == '\'')) {
-				value = value[1 : len(value)-1]
-			}
-
-			// 只有在环境变量未设置时才设置
-			if os.Getenv(key) == "" {
-				os.Setenv(key, value)
-			}
-		}
-	}
+	AI struct {
+		ModuleName string `toml:"module_name"`
+		APIKey     string `toml:"api_key"`
+		BaseURL    string `toml:"base_url"` // for OpenAI
+	} `toml:"ai"`
 }
 
 type Config struct {
 	SocketPath    string
 	CheckInterval time.Duration
 	CacheDir      string
-	GeminiAPIKey  string
+	AiModuleName  string
+	AiRuleURL     string
+	AiAPIKey      string
+}
+
+// getConfigPath 获取配置文件路径
+func getConfigPath() string {
+	// 优先使用 XDG_CONFIG_HOME 环境变量
+	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
+		return filepath.Join(configHome, "lyrics", "config.toml")
+	}
+
+	// 否则使用用户主目录下的 .config
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("WARN: Cannot get user home directory: %v", err)
+		return "config.toml" // 回退到当前目录
+	}
+
+	return filepath.Join(homeDir, ".config", "lyrics", "config.toml")
+}
+
+// loadTomlConfig 加载TOML配置文件
+func loadTomlConfig() (*TomlConfig, error) {
+	configPath := getConfigPath()
+
+	// 检查配置文件是否存在
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		log.Printf("INFO: Config file not found at %s, using defaults", configPath)
+		return &TomlConfig{}, nil
+	}
+
+	var config TomlConfig
+	if _, err := toml.DecodeFile(configPath, &config); err != nil {
+		return nil, err
+	}
+
+	log.Printf("INFO: Loaded config from %s", configPath)
+	return &config, nil
 }
 
 func Load() *Config {
-	// 首先尝试加载环境变量配置文件
-	loadEnvFiles()
+	// 加载TOML配置文件
+	tomlConfig, err := loadTomlConfig()
+	if err != nil {
+		log.Printf("ERROR: Failed to load config file: %v", err)
+		log.Printf("INFO: Using default configuration")
+		tomlConfig = &TomlConfig{}
+	}
 
-	geminiAPIKey := os.Getenv("GEMINI_API_KEY")
-	if geminiAPIKey == "" {
+	// 设置默认值
+	config := &Config{
+		SocketPath:    DefaultSocketPath,
+		CheckInterval: DefaultCheckInterval,
+		CacheDir:      getDefaultCacheDir(),
+		AiModuleName:  "gemini",
+		AiRuleURL:     "",
+		AiAPIKey:      "",
+	}
+
+	// 从TOML配置中覆盖设置
+	if tomlConfig.App.SocketPath != "" {
+		config.SocketPath = tomlConfig.App.SocketPath
+	}
+
+	if tomlConfig.App.CheckInterval != "" {
+		if duration, err := time.ParseDuration(tomlConfig.App.CheckInterval); err == nil {
+			config.CheckInterval = duration
+		} else {
+			log.Printf("WARN: Invalid check_interval format '%s', using default", tomlConfig.App.CheckInterval)
+		}
+	}
+
+	if tomlConfig.App.CacheDir != "" {
+		config.CacheDir = tomlConfig.App.CacheDir
+	}
+
+	if tomlConfig.AI.ModuleName != "" {
+		config.AiModuleName = tomlConfig.AI.ModuleName
+	}
+
+	if tomlConfig.AI.BaseURL != "" {
+		config.AiRuleURL = tomlConfig.AI.BaseURL
+	}
+
+	if tomlConfig.AI.APIKey != "" {
+		config.AiAPIKey = tomlConfig.AI.APIKey
+	}
+
+	// 检查必要的配置
+	if config.AiAPIKey == "" {
 		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-		log.Println("!!! WARNING: GEMINI_API_KEY environment variable not set.     !!!")
+		log.Println("!!! WARNING: No AI API key configured in config.toml.         !!!")
+		log.Printf("!!! Please set ai.api_key in %s", getConfigPath())
 		log.Println("!!! The application will not be able to fetch lyrics.         !!!")
 		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	}
 
-	// 允许通过环境变量覆盖缓存目录
-	cacheDir := os.Getenv("LYRICS_CACHE_DIR")
-	if cacheDir == "" {
-		cacheDir = getDefaultCacheDir()
-	}
-
-	return &Config{
-		SocketPath:    DefaultSocketPath,
-		CheckInterval: DefaultCheckInterval,
-		CacheDir:      cacheDir,
-		GeminiAPIKey:  geminiAPIKey,
-	}
+	return config
 }

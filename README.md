@@ -133,71 +133,26 @@ sudo pacman -S go gtk4 pkg-config playerctl  # Arch Linux
 sudo apt install golang-go libgtk-4-dev pkg-config playerctl  # Ubuntu/Debian
 ```
 
-### 2. 配置 API 密钥
+### 2. 配置应用
 
-#### 方法一：使用配置文件 (推荐)
+#### 创建配置文件
 ```bash
+# 创建配置目录
+mkdir -p ~/.config/lyrics
+
 # 复制示例配置文件
-cp .env.example .env
+cp config.toml.example ~/.config/lyrics/config.toml
 
 # 编辑配置文件
-nano .env  # 或使用你喜欢的编辑器
+nano ~/.config/lyrics/config.toml
 ```
 
-#### 方法二：直接设置环境变量
-```bash
-# 临时设置 (仅当前会话)
-export GEMINI_API_KEY="your_gemini_api_key_here"
-
-# 永久设置 (添加到 ~/.bashrc 或 ~/.zshrc)
-echo 'export GEMINI_API_KEY="your_gemini_api_key_here"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-#### 方法三：用户全局配置文件
-```bash
-# 创建用户全局配置 (所有项目共享)
-nano ~/.lyrics.env
-```
-
-**`.env` 配置文件模板**：
-```bash
-# Lyrics 应用环境变量配置文件
-# 文件位置: .env (项目根目录) 或 ~/.lyrics.env (用户主目录)
-
-# =============================================================================
-# 必需配置
-# =============================================================================
-
-# Gemini AI API 密钥 
-# 获取地址: https://makersuite.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# =============================================================================
-# 可选配置
-# =============================================================================
-
-# 网易云音乐 Cookie (可选，用于避免限流)
-# 获取方式: 浏览器开发者工具 -> 网络 -> music.163.com -> 请求头中的 Cookie
-NETEASE_COOKIE=""
-
-# 自定义缓存目录 (可选)
-# 默认: ~/.cache/lyrics (Linux) 或 $XDG_CACHE_HOME/lyrics
-LYRICS_CACHE_DIR=""
-
-# IPC Socket 路径 (可选)
-# 默认: /tmp/lyrics_app.sock
-SOCKET_PATH=""
-
-# 日志级别 (可选)
-# 可选值: debug, info, warn, error
-# 默认: info
-LOG_LEVEL=info
-
-# Gemini 模型名称 (可选)
-# 推荐: gemini-2.5-flash (更快) 或 gemini-pro (更准确)
-# 默认: gemini-pro
-GEMINI_MODEL=gemini-2.5-flash
+#### 设置 API 密钥
+在配置文件中设置您的 Gemini API 密钥：
+```toml
+[ai]
+module_name = "gemini"
+api_key = "your_gemini_api_key_here"
 ```
 
 #### 如何获取 Gemini API 密钥
@@ -207,18 +162,6 @@ GEMINI_MODEL=gemini-2.5-flash
 3. 点击 "Create API Key"
 4. 复制生成的 API 密钥
 5. 将密钥添加到配置文件中
-
-#### 如何获取网易云 Cookie (可选)
-
-网易云 Cookie 可以提高歌词获取成功率，避免被限流：
-
-1. 浏览器打开 [music.163.com](https://music.163.com)
-2. 登录你的网易云账号
-3. 按 F12 打开开发者工具
-4. 切换到 "Network/网络" 标签
-5. 刷新页面，找到 music.163.com 的请求
-6. 在请求头中找到 `Cookie` 字段
-7. 复制整个 Cookie 值到配置文件中
 
 ### 3. 编译项目
 ```bash
@@ -271,113 +214,128 @@ make uninstall-user
 
 ## ⚙️ 详细配置
 
-### 环境变量配置
+### 配置文件路径
 
-应用支持多种方式配置环境变量，按优先级排序：
+应用使用 TOML 格式的配置文件，按以下优先级查找配置：
 
-1. **命令行环境变量** (最高优先级)
-2. **配置文件** (推荐方式)
-3. **默认值** (最低优先级)
-
-### 配置文件支持
-
-应用会按以下顺序自动加载配置文件：
-
-```bash
-.env          # 项目根目录配置文件
-.env.local    # 本地开发配置文件  
-~/.lyrics.env # 用户主目录配置文件
-```
-
-**示例配置文件 (`.env`)**：
-```bash
-# === 必需配置 ===
-# Gemini AI API 密钥
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# === 可选配置 ===
-# 网易云音乐 Cookie (避免限流)
-NETEASE_COOKIE="your_netease_cookie_here"
-
-# 自定义缓存目录
-LYRICS_CACHE_DIR=/path/to/custom/cache
-
-# IPC Socket 路径
-SOCKET_PATH=/tmp/custom_lyrics_app.sock
-
-# 日志级别 (debug, info, warn, error)
-LOG_LEVEL=info
-
-# Gemini 模型版本
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-### 环境变量说明
-
-| 变量名 | 描述 | 默认值 | 是否必需 |
-|--------|------|--------|----------|
-| `GEMINI_API_KEY` | Gemini AI API 密钥 | 无 | ✅ 必需 |
-| `NETEASE_COOKIE` | 网易云音乐 Cookie | 空 | ❌ 可选 |
-| `LYRICS_CACHE_DIR` | 歌词缓存目录 | `~/.cache/lyrics` | ❌ 可选 |
-| `SOCKET_PATH` | IPC Socket 路径 | `/tmp/lyrics_app.sock` | ❌ 可选 |
-| `LOG_LEVEL` | 日志级别 | `info` | ❌ 可选 |
-| `GEMINI_MODEL` | Gemini 模型名称 | `gemini-pro` | ❌ 可选 |
+1. **XDG 配置目录**: `$XDG_CONFIG_HOME/lyrics/config.toml`
+2. **用户配置目录**: `~/.config/lyrics/config.toml` (推荐)
+3. **当前目录**: `config.toml` (回退选项)
 
 ### 配置文件格式
 
-```bash
-# 注释行以 # 开头
-KEY=value
-KEY="quoted value"
-KEY='single quoted value'
+**完整配置示例 (`~/.config/lyrics/config.toml`)**：
+```toml
+[app]
+# Unix socket path for IPC communication
+socket_path = "/tmp/lyrics_app.sock"
 
-# 空行会被忽略
+# Check interval for media status (支持格式: "5s", "10s", "1m")
+check_interval = "5s"
 
-# 支持的引号格式
-QUOTED_VALUE="双引号值"
-SINGLE_QUOTED='单引号值'
-UNQUOTED_VALUE=无引号值
+# Lyrics cache directory (留空使用默认路径)
+cache_dir = ""
+
+[ai]
+# AI module: "gemini" or "openai"
+module_name = "gemini"
+
+# API key for the selected AI service
+api_key = "your_api_key_here"
+
+# Base URL for OpenAI-compatible APIs (仅在使用 OpenAI 时需要)
+base_url = ""
 ```
 
-### 配置验证与故障排除
+### 配置选项说明
 
-#### 验证配置
-启动应用时会显示配置加载信息：
+#### [app] 部分
+
+| 配置项 | 描述 | 默认值 | 示例 |
+|--------|------|--------|------|
+| `socket_path` | IPC 通信的 Unix socket 路径 | `/tmp/lyrics_app.sock` | `/tmp/lyrics_app.sock` |
+| `check_interval` | 媒体状态检查间隔 | `5s` | `"5s"`, `"10s"`, `"1m"` |
+| `cache_dir` | 歌词缓存目录 | `~/.cache/lyrics` | `"/path/to/cache"` |
+
+#### [ai] 部分
+
+| 配置项 | 描述 | 可选值 | 示例 |
+|--------|------|--------|------|
+| `module_name` | AI 服务提供商模块名 | `gemini`（所有Gemini系列模型）, `openai` | `"gemini"` |
+| `api_key` | AI 服务的 API 密钥 | - | `"AIzaSyA..."` |
+| `base_url` | OpenAI 兼容 API 的基础 URL | - | `"https://api.openai.com/v1"` |
+
+**注意**: 对于所有 Gemini 系列模型（如 gemini-pro, gemini-2.5-flash 等），都使用 `module_name = "gemini"`。
+
+### 不同 AI 服务的配置示例
+
+#### Gemini AI (推荐)
+```toml
+[ai]
+module_name = "gemini"  # 适用于所有Gemini系列模型
+api_key = "AIzaSyA..."  # 从 https://makersuite.google.com/app/apikey 获取
+```
+
+**支持的Gemini模型**: gemini-pro, gemini-2.5-flash, gemini-1.5-pro 等所有Gemini系列模型都使用相同的配置。
+
+#### OpenAI
+```toml
+[ai]
+module_name = "openai"
+api_key = "sk-..."      # 从 https://platform.openai.com/api-keys 获取
+base_url = ""           # 使用官方 API，留空即可
+```
+
+#### 自托管 OpenAI 兼容 API
+```toml
+[ai]
+module_name = "openai"
+api_key = "your_custom_key"
+base_url = "https://your-api-endpoint.com/v1"
+```
+
+### 配置验证
+
+启动应用时会显示配置加载状态：
+
 ```bash
 ./build/lyrics-backend
 # 输出示例:
-# 2024/12/19 10:30:00 [INFO] Loaded environment file: .env
-# 2024/12/19 10:30:00 [INFO] Cache directory: /home/user/.cache/lyrics
+# INFO: Loaded config from /home/user/.config/lyrics/config.toml
+# INFO: Cache directory: /home/user/.cache/lyrics
+# INFO: Using AI module: gemini
+```
+
+如果配置文件不存在，会显示：
+```bash
+# INFO: Config file not found at /home/user/.config/lyrics/config.toml, using defaults
+# WARNING: No AI API key configured in config.toml.
+```
 # 2024/12/19 10:30:00 [INFO] Socket path: /tmp/lyrics_app.sock
 # 2024/12/19 10:30:00 [INFO] Starting lyrics app...
 ```
 
 #### 检查配置是否正确
 ```bash
-# 方法一：查看应用启动日志
+# 查看应用启动日志
 ./build/lyrics-backend | head -10
 
-# 方法二：测试环境变量
-echo $GEMINI_API_KEY  # 应该显示你的API密钥
-
-# 方法三：检查配置文件是否存在
-ls -la .env ~/.lyrics.env 2>/dev/null || echo "未找到配置文件"
+# 检查配置文件是否存在
+ls -la ~/.config/lyrics/config.toml
 ```
 
 #### 常见配置问题
 
-**问题 1: GEMINI_API_KEY 未设置**
+**问题 1: API 密钥未设置**
 ```
-错误: API key is required
-解决: 确保在 .env 文件中设置了正确的 GEMINI_API_KEY
+错误: No AI API key configured in config.toml
+解决: 在 ~/.config/lyrics/config.toml 中设置正确的 ai.api_key
 ```
 
 **问题 2: 配置文件格式错误**
 ```
-错误: 配置加载失败
-解决: 检查 .env 文件格式，确保没有多余的空格和引号
-正确格式: GEMINI_API_KEY=your_key_here
-错误格式: GEMINI_API_KEY = "your_key_here"
+错误: Failed to load config file
+解决: 检查 config.toml 文件格式，确保 TOML 语法正确
 ```
 
 **问题 3: 缓存目录权限问题**
@@ -460,68 +418,6 @@ cp .env .env.template
 sed -i 's/=.*/=your_key_here/' .env.template
 ```
 
-#### 配置版本管理
-```bash
-# 项目配置示例文件 (可以提交到 git)
-# .env.example
-GEMINI_API_KEY=your_gemini_api_key_here
-NETEASE_COOKIE=your_netease_cookie_here
-LOG_LEVEL=info
-
-# 个人配置 (不提交到 git)
-# .env
-GEMINI_API_KEY=actual_secret_key
-NETEASE_COOKIE=actual_cookie_value
-LOG_LEVEL=debug
-```
-
-#### 多环境配置切换
-```bash
-# 开发环境
-cp .env.development .env
-
-# 测试环境  
-cp .env.testing .env
-
-# 生产环境
-cp .env.production .env
-
-# 或使用符号链接
-ln -sf .env.production .env
-```
-
-#### 配置验证脚本
-```bash
-#!/bin/bash
-# check_config.sh - 验证配置是否正确
-
-echo "🔍 检查配置文件..."
-
-# 检查配置文件是否存在
-for config_file in .env ~/.lyrics.env; do
-    if [[ -f "$config_file" ]]; then
-        echo "✅ 找到配置文件: $config_file"
-        
-        # 检查必需的配置项
-        if grep -q "GEMINI_API_KEY=" "$config_file"; then
-            echo "✅ GEMINI_API_KEY 已设置"
-        else
-            echo "❌ GEMINI_API_KEY 未设置"
-        fi
-    else
-        echo "⚠️  配置文件不存在: $config_file"
-    fi
-done
-
-# 检查缓存目录
-cache_dir="${LYRICS_CACHE_DIR:-$HOME/.cache/lyrics}"
-if [[ -d "$cache_dir" && -w "$cache_dir" ]]; then
-    echo "✅ 缓存目录可写: $cache_dir"
-else
-    echo "⚠️  缓存目录问题: $cache_dir"
-fi
-
-echo "🎵 配置检查完成"
 ```
 
 ## 📁 项目结构
@@ -765,8 +661,10 @@ cd lyrics
 # 安装依赖
 ./install-deps.sh
 
-# 设置 API 密钥
-export GEMINI_API_KEY="your_api_key_here"
+# 设置配置文件
+mkdir -p ~/.config/lyrics
+cp config.toml.example ~/.config/lyrics/config.toml
+# 编辑配置文件，设置 AI API 密钥
 
 # 编译项目
 make all

@@ -33,6 +33,10 @@ func NewOpenAi(apiKey, modelName, baseURL string) *openAi {
 	return g
 }
 
+func (o *openAi) Name() string {
+	return "openai"
+}
+
 func (o *openAi) HandleTextWithImg(msg string, imgType string, imgData []byte) (string, error) {
 	return o.HandleText(msg)
 }

@@ -180,10 +180,10 @@ private:
             "  font-weight: 300; "
             "  padding: 2px 8px; "
             "  text-shadow: "
-            "    0 0 12px rgba(80, 232, 204, 0.8), "
-            "    0 0 24px rgba(80, 232, 204, 0.5), "
-            "    0 0 36px rgba(80, 232, 204, 0.3), "
-            "    2px 2px 4px rgba(0, 0, 0, 0.7); "
+            "    0 0 12px rgba(80, 232, 204, 0.5), "
+            "    0 0 24px rgba(80, 232, 204, 0.3), "
+            "    0 0 36px rgba(80, 232, 204, 0.2), "
+            "    2px 2px 4px rgba(0, 0, 0, 0.4); "
             "}";
 
         gtk_css_provider_load_from_string(css_provider, css_data.c_str());

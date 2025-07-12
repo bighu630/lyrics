@@ -15,6 +15,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const timeShit = 0.1 // s
+
 type App struct {
 	cfg            *config.Config
 	ipcServer      *ipc.Server
@@ -34,7 +36,7 @@ func New(cfg *config.Config) *App {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	// 创建歌词提供商
-	lyricsProvider, err := lyrics.NewProvider(cfg.CacheDir, cfg.GeminiAPIKey)
+	lyricsProvider, err := lyrics.NewProvider(cfg.CacheDir, cfg.AiModuleName, cfg.AiRuleURL, cfg.AiAPIKey)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create lyrics provider")
 	}
@@ -200,7 +202,7 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 				}
 
 				// 查找当前时间对应的歌词（提前0.5秒显示）
-				lookupTime := currentTime + 0.5 // 提前0.5秒查找歌词
+				lookupTime := currentTime + timeShit // 提前0.5秒查找歌词
 				newIndex := getLyricIndexAtTime(lines, lookupTime)
 
 				// 只有索引改变时才处理
@@ -208,7 +210,7 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 					if newIndex >= 0 && newIndex < len(lines) {
 						lyric := lines[newIndex]
 						// 计算时间差时考虑0.5秒的提前量
-						timeDiff := (currentTime - lyric.Time + 0.5) * 1000 // 转换为毫秒
+						timeDiff := (currentTime - lyric.Time + timeShit) * 1000 // 转换为毫秒
 
 						// 调整时间窗口：考虑0.5秒提前，允许-100ms到+100ms的误差
 						if timeDiff >= -100 && timeDiff <= 100 { // 允许100ms的前后误差
@@ -233,7 +235,7 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 
 							a.ipcServer.Broadcast(lyric.Text)
 						}
-					} else if newIndex == -1 && currentTime+0.5 < lines[0].Time {
+					} else if newIndex == -1 && currentTime+timeShit < lines[0].Time {
 						// 在第一句歌词之前
 						if lastIndex != -1 {
 							a.ipcServer.Broadcast("♪ 即将开始... ♪")
