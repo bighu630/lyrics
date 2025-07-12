@@ -43,15 +43,40 @@ type TomlConfig struct {
 		APIKey     string `toml:"api_key"`
 		BaseURL    string `toml:"base_url"` // for OpenAI
 	} `toml:"ai"`
+
+	Redis struct {
+		Addr     string `toml:"addr"`
+		Password string `toml:"password"`
+		DB       int    `toml:"db"`
+	} `toml:"redis"`
 }
 
-type Config struct {
+// AppConfig 应用配置
+type AppConfig struct {
 	SocketPath    string
 	CheckInterval time.Duration
 	CacheDir      string
-	AiModuleName  string
-	AiRuleURL     string
-	AiAPIKey      string
+}
+
+// AIConfig AI配置
+type AIConfig struct {
+	ModuleName string
+	APIKey     string
+	BaseURL    string
+}
+
+// RedisConfig Redis配置
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
+// Config 主配置结构
+type Config struct {
+	App   AppConfig
+	AI    AIConfig
+	Redis RedisConfig
 }
 
 // getConfigPath 获取配置文件路径
@@ -101,45 +126,68 @@ func Load() *Config {
 
 	// 设置默认值
 	config := &Config{
-		SocketPath:    DefaultSocketPath,
-		CheckInterval: DefaultCheckInterval,
-		CacheDir:      getDefaultCacheDir(),
-		AiModuleName:  "gemini",
-		AiRuleURL:     "",
-		AiAPIKey:      "",
+		App: AppConfig{
+			SocketPath:    DefaultSocketPath,
+			CheckInterval: DefaultCheckInterval,
+			CacheDir:      getDefaultCacheDir(),
+		},
+		AI: AIConfig{
+			ModuleName: "gemini",
+			APIKey:     "",
+			BaseURL:    "",
+		},
+		Redis: RedisConfig{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		},
 	}
 
-	// 从TOML配置中覆盖设置
+	// 从TOML配置中覆盖App设置
 	if tomlConfig.App.SocketPath != "" {
-		config.SocketPath = tomlConfig.App.SocketPath
+		config.App.SocketPath = tomlConfig.App.SocketPath
 	}
 
 	if tomlConfig.App.CheckInterval != "" {
 		if duration, err := time.ParseDuration(tomlConfig.App.CheckInterval); err == nil {
-			config.CheckInterval = duration
+			config.App.CheckInterval = duration
 		} else {
 			log.Printf("WARN: Invalid check_interval format '%s', using default", tomlConfig.App.CheckInterval)
 		}
 	}
 
 	if tomlConfig.App.CacheDir != "" {
-		config.CacheDir = tomlConfig.App.CacheDir
+		config.App.CacheDir = tomlConfig.App.CacheDir
 	}
 
+	// 从TOML配置中覆盖AI设置
 	if tomlConfig.AI.ModuleName != "" {
-		config.AiModuleName = tomlConfig.AI.ModuleName
+		config.AI.ModuleName = tomlConfig.AI.ModuleName
 	}
 
 	if tomlConfig.AI.BaseURL != "" {
-		config.AiRuleURL = tomlConfig.AI.BaseURL
+		config.AI.BaseURL = tomlConfig.AI.BaseURL
 	}
 
 	if tomlConfig.AI.APIKey != "" {
-		config.AiAPIKey = tomlConfig.AI.APIKey
+		config.AI.APIKey = tomlConfig.AI.APIKey
+	}
+
+	// 从TOML配置中覆盖Redis设置
+	if tomlConfig.Redis.Addr != "" {
+		config.Redis.Addr = tomlConfig.Redis.Addr
+	}
+
+	if tomlConfig.Redis.Password != "" {
+		config.Redis.Password = tomlConfig.Redis.Password
+	}
+
+	if tomlConfig.Redis.DB != 0 {
+		config.Redis.DB = tomlConfig.Redis.DB
 	}
 
 	// 检查必要的配置
-	if config.AiAPIKey == "" {
+	if config.AI.APIKey == "" {
 		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		log.Println("!!! WARNING: No AI API key configured in config.toml.         !!!")
 		log.Printf("!!! Please set ai.api_key in %s", getConfigPath())

@@ -36,29 +36,29 @@ func New(cfg *config.Config) *App {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	// 创建歌词提供商
-	lyricsProvider, err := lyrics.NewProvider(cfg.CacheDir, cfg.AiModuleName, cfg.AiRuleURL, cfg.AiAPIKey)
+	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI.ModuleName, cfg.AI.BaseURL, cfg.AI.APIKey, cfg.Redis)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create lyrics provider")
 	}
 
 	return &App{
 		cfg:            cfg,
-		ipcServer:      ipc.NewServer(cfg.SocketPath),
+		ipcServer:      ipc.NewServer(cfg.App.SocketPath),
 		lyricsProvider: lyricsProvider,
 	}
 }
 func (a *App) Run() {
-	if err := os.MkdirAll(a.cfg.CacheDir, 0755); err != nil {
-		log.Fatal().Err(err).Str("cache_dir", a.cfg.CacheDir).Msg("Failed to create cache directory")
+	if err := os.MkdirAll(a.cfg.App.CacheDir, 0755); err != nil {
+		log.Fatal().Err(err).Str("cache_dir", a.cfg.App.CacheDir).Msg("Failed to create cache directory")
 	}
-	log.Info().Str("cache_dir", a.cfg.CacheDir).Msg("Lyrics cache directory")
+	log.Info().Str("cache_dir", a.cfg.App.CacheDir).Msg("Lyrics cache directory")
 
 	if err := a.ipcServer.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start IPC server")
 	}
 	defer a.ipcServer.Close()
 
-	ticker := time.NewTicker(a.cfg.CheckInterval)
+	ticker := time.NewTicker(a.cfg.App.CheckInterval)
 	defer ticker.Stop()
 
 	log.Info().Msg("Starting player check loop...")

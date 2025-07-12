@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-backend/internal/config"
 	"go-backend/internal/player"
 	"go-backend/pkg/ai"
 	"go-backend/pkg/ai/gemini"
 	"go-backend/pkg/ai/openai"
 	"go-backend/pkg/music"
+	"go-backend/pkg/redis"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,6 +30,7 @@ type Line struct {
 type Provider struct {
 	cacheDir     string
 	aiClient     ai.AiInterface
+	redis        *redis.Client
 	musicManager *music.Manager
 }
 
@@ -42,7 +45,7 @@ func formatQuerySong(title string) string {
 	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息: {"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。  输入是一个媒体标题，如果标题中包含歌曲信息，请返回符合格式的JSON；否则，返回{"is_song": false}。 请注意，"title" 和 "artist" 必须准确，否则将被视为错误，切记不要任何markdown格式，并将繁体中文转换为简体。 媒体标题是：%s`, title)
 }
 
-func NewProvider(cacheDir, moduleName, url, apiKey string) (*Provider, error) {
+func NewProvider(cacheDir, moduleName, url, apiKey string, redisCfg config.RedisConfig) (*Provider, error) {
 	musicManager, err := music.CreateDefaultManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create music manager: %w", err)
@@ -55,9 +58,17 @@ func NewProvider(cacheDir, moduleName, url, apiKey string) (*Provider, error) {
 		aiClient = openai.NewOpenAi(apiKey, moduleName, url)
 	}
 
+	redisClient, err := redis.NewClient(redisCfg.Addr, redisCfg.Password, redisCfg.DB)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Redis client: %w", err)
+	}
+	if err := redisClient.Ping(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to ping Redis: %w", err)
+	}
 	return &Provider{
 		cacheDir:     cacheDir,
 		aiClient:     aiClient,
+		redis:        redisClient,
 		musicManager: musicManager,
 	}, nil
 }
@@ -69,13 +80,22 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	var rawSongInfo string
 	var err error
 	const maxRetries = 3
-	for i := range maxRetries {
-		rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
-		if err == nil {
-			break
+	rawSongInfo, err = p.redis.Get(ctx, songIdentifier)
+	if err == nil && rawSongInfo != "" {
+		log.Printf("INFO: Cache HIT for %s. Loading lyrics from Redis.", songIdentifier)
+	} else {
+		for i := range maxRetries {
+			rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
+			if err == nil {
+				if len(rawSongInfo) < 30 {
+					p.redis.SetWithExpiration(ctx, songIdentifier, rawSongInfo, 1*time.Hour)
+				}
+				p.redis.Set(ctx, songIdentifier, rawSongInfo)
+				break
+			}
+			log.Printf("WARN: Failed to query Gemini (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(1 * time.Second) // Wait a bit before retrying
 		}
-		log.Printf("WARN: Failed to query Gemini (attempt %d/%d): %v", i+1, maxRetries, err)
-		time.Sleep(1 * time.Second) // Wait a bit before retrying
 	}
 
 	if err != nil {
