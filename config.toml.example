@@ -45,6 +45,7 @@ base_url = ""
 # api_key = "your_custom_key"
 # base_url = "https://your-api-endpoint.com/v1"
 
+# redis可选，用于缓存ai的返回结果
 [redis]
 # Redis server address (host:port)
 addr = "localhost:6379"
