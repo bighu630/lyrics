@@ -4,16 +4,20 @@
 
 ![image](https://github.com/user-attachments/assets/84d96bf3-fcd6-48f1-8cd7-864d0003861a)
 
+## 🚀 快速开始
+
+**新用户推荐**: 查看 [快速开始指南](QUICK_START.md) - 5分钟快速上手！
 
 ## 📋 目录
 
+- [快速开始](QUICK_START.md) ⭐ **推荐新用户**
 - [系统架构](#系统架构)
 - [工作流程](#工作流程)
 - [技术栈](#技术栈)
-- [快速开始](#快速开始)
 - [详细配置](#详细配置)
 - [项目结构](#项目结构)
 - [Hyprland 集成](#hyprland-集成)
+- [Waybar 集成](#waybar-集成)
 - [常见问题](#常见问题)
 - [开发说明](#开发说明)
 
@@ -129,8 +133,9 @@ graph TD
 ./install-deps.sh
 
 # 或者手动安装
-sudo pacman -S go gtk4 pkg-config playerctl  # Arch Linux
-sudo apt install golang-go libgtk-4-dev pkg-config playerctl  # Ubuntu/Debian
+sudo pacman -S go gtk4 pkg-config playerctl socat  # Arch Linux
+sudo apt install golang-go libgtk-4-dev pkg-config playerctl socat  # Ubuntu/Debian
+sudo dnf install golang gtk4-devel pkgconf-pkg-config playerctl socat  # Fedora
 ```
 
 ### 2. 配置应用
@@ -418,8 +423,7 @@ cp .env .env.template
 sed -i 's/=.*/=your_key_here/' .env.template
 ```
 
-```
-
+````markdown
 ## 📁 项目结构
 
 ```
