@@ -5,20 +5,21 @@ import (
 	"go-backend/pkg/lrclib"
 	"go-backend/pkg/netease"
 	"go-backend/pkg/qqmusic"
-	"log"
+
+	"github.com/rs/zerolog/log"
 )
 
 // CreateProvider 创建音乐提供商客户端
 func CreateProvider(provider Provider) (MusicAPI, error) {
 	switch provider {
 	case ProviderLRCLib:
-		log.Printf("INFO: Creating LRCLib client")
+		log.Info().Str("provider", "lrclib").Msg("Creating LRCLib client")
 		return lrclib.NewClient(), nil
 	case ProviderNetEase:
-		log.Printf("INFO: Creating NetEase music client")
+		log.Info().Str("provider", "netease").Msg("Creating NetEase music client")
 		return netease.NewClient(), nil
 	case ProviderQQMusic:
-		log.Printf("INFO: Creating QQ Music client")
+		log.Info().Str("provider", "qqmusic").Msg("Creating QQ Music client")
 		return qqmusic.NewClient(), nil
 	case ProviderKugou:
 		return nil, fmt.Errorf("kugou music provider not implemented yet")
@@ -41,7 +42,10 @@ func CreateDefaultManager() (*Manager, error) {
 	for _, providerType := range providerTypes {
 		provider, err := CreateProvider(providerType)
 		if err != nil {
-			log.Printf("WARN: Failed to create provider %s: %v", providerType, err)
+			log.Warn().
+				Str("provider", string(providerType)).
+				Err(err).
+				Msg("Failed to create provider")
 			continue
 		}
 		providers = append(providers, provider)
@@ -50,6 +54,10 @@ func CreateDefaultManager() (*Manager, error) {
 	if len(providers) == 0 {
 		return nil, fmt.Errorf("no music providers available")
 	}
+
+	log.Info().
+		Int("provider_count", len(providers)).
+		Msg("Created music API manager")
 
 	return NewManager(providers), nil
 }

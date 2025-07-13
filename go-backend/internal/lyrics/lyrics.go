@@ -12,7 +12,6 @@ import (
 	"go-backend/pkg/ai/openai"
 	"go-backend/pkg/music"
 	"go-backend/pkg/redis"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type Line struct {
@@ -91,7 +92,9 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 		rawSongInfo, err = p.redis.Get(ctx, songIdentifier)
 	}
 	if err == nil && rawSongInfo != "" {
-		log.Printf("INFO: Cache HIT for %s. Loading lyrics from Redis.", songIdentifier)
+		log.Info().
+			Str("song_identifier", songIdentifier).
+			Msg("Cache HIT for song. Loading lyrics from Redis")
 	} else {
 		for i := range maxRetries {
 			rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
@@ -102,37 +105,52 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 				p.redis.Set(ctx, songIdentifier, rawSongInfo)
 				break
 			}
-			log.Printf("WARN: Failed to query Gemini (attempt %d/%d): %v", i+1, maxRetries, err)
+			log.Warn().
+				Err(err).
+				Int("attempt", i+1).
+				Int("max_retries", maxRetries).
+				Msg("Failed to query AI service")
 			time.Sleep(1 * time.Second) // Wait a bit before retrying
 		}
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to query Gemini after %d attempts: %w", maxRetries, err)
+		return "", fmt.Errorf("failed to query AI service after %d attempts: %w", maxRetries, err)
 	}
 
 	var songInfo SongInfo
 	if unmarshalErr := json.Unmarshal([]byte(rawSongInfo), &songInfo); unmarshalErr != nil {
-		return "", fmt.Errorf("failed to parse Gemini response: %w", unmarshalErr)
+		return "", fmt.Errorf("failed to parse AI response: %w", unmarshalErr)
 	}
 
 	if !songInfo.IsSong {
 		return fmt.Sprintf("'%s' is not a song.", songIdentifier), nil
 	}
-	log.Printf("INFO: Gemini returned keywords: '%s'", songInfo.Title)
+	log.Info().
+		Str("song_title", songInfo.Title).
+		Str("song_identifier", songIdentifier).
+		Msg("AI returned song keywords")
 
 	cacheFilename := sanitizeFilename(songInfo.Title+"-"+songInfo.Artist) + ".lrc"
 	cacheFilepath := filepath.Join(p.cacheDir, cacheFilename)
 
 	if cachedLyrics, readErr := os.ReadFile(cacheFilepath); readErr == nil {
-		log.Printf("INFO: Cache HIT. Loading lyrics from %s", cacheFilepath)
+		log.Info().
+			Str("cache_file", cacheFilepath).
+			Msg("Cache HIT. Loading lyrics from file")
 		return string(cachedLyrics), nil
 	}
-	log.Printf("INFO: Cache MISS for %s. Fetching from API.", songIdentifier)
+	log.Info().
+		Str("song_identifier", songIdentifier).
+		Msg("Cache MISS. Fetching from API")
 
 	// 获取歌曲时长
 	songInfo.Duration = player.GetCurrentDuration()
-	log.Printf("INFO: Got song duration: %.2f seconds for '%s - %s'", songInfo.Duration, songInfo.Title, songInfo.Artist)
+	log.Info().
+		Float64("duration", songInfo.Duration).
+		Str("title", songInfo.Title).
+		Str("artist", songInfo.Artist).
+		Msg("Got song duration")
 
 	// 使用音乐管理器直接获取歌词（封装了搜索+获取歌词的过程）
 	lyrics, err := p.musicManager.GetLyricsByInfo(ctx, songInfo.Title, songInfo.Artist, songInfo.Duration)
@@ -140,9 +158,14 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 		return "", fmt.Errorf("failed to get lyrics for '%s - %s': %w", songInfo.Title, songInfo.Artist, err)
 	}
 
-	log.Printf("INFO: Saving new lyrics to cache file: %s", cacheFilepath)
+	log.Info().
+		Str("cache_file", cacheFilepath).
+		Msg("Saving new lyrics to cache file")
 	if err := os.WriteFile(cacheFilepath, []byte(lyrics), 0644); err != nil {
-		log.Printf("ERROR: Failed to write to cache file %s: %v", cacheFilepath, err)
+		log.Error().
+			Err(err).
+			Str("cache_file", cacheFilepath).
+			Msg("Failed to write to cache file")
 	}
 
 	return lyrics, nil

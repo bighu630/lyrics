@@ -197,6 +197,7 @@ func (s *Server) Broadcast(lyrics string) {
 	if !strings.HasSuffix(lyrics, "\n") {
 		lyrics += "\n"
 	}
+	os.WriteFile("/dev/shm/lyrics", []byte(lyrics), 0644)
 
 	s.lyricsLock.Lock()
 	s.lyrics = lyrics

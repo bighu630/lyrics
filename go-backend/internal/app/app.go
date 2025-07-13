@@ -28,6 +28,11 @@ type App struct {
 	schedulerMutex  sync.Mutex
 	schedulerCancel context.CancelFunc
 	schedulerActive bool
+
+	// 播放状态缓存
+	playingCache     bool
+	lastPlayingCheck time.Time
+	playingMutex     sync.Mutex
 }
 
 func New(cfg *config.Config) *App {
@@ -127,6 +132,37 @@ func getLyricIndexAtTime(lines []lyrics.Line, t float64) int {
 
 	return result
 }
+
+// getCachedPlayingStatus 获取缓存的播放状态，每3秒更新一次
+func (a *App) getCachedPlayingStatus() bool {
+	const cacheDuration = 3 * time.Second
+
+	a.playingMutex.Lock()
+	defer a.playingMutex.Unlock()
+
+	now := time.Now()
+	if now.Sub(a.lastPlayingCheck) >= cacheDuration {
+		a.playingCache = player.IsPlaying()
+		a.lastPlayingCheck = now
+		log.Debug().
+			Bool("is_playing", a.playingCache).
+			Msg("Updated playing status cache")
+	}
+
+	return a.playingCache
+}
+
+// forceUpdatePlayingStatus 强制更新播放状态缓存
+func (a *App) forceUpdatePlayingStatus() bool {
+	a.playingMutex.Lock()
+	defer a.playingMutex.Unlock()
+
+	a.playingCache = player.IsPlaying()
+	a.lastPlayingCheck = time.Now()
+
+	return a.playingCache
+}
+
 func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 	// 使用专门的锁保护调度器状态
 	a.schedulerMutex.Lock()
@@ -176,6 +212,9 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 			baseTime  = getCurrentTime() // 获取基准时间
 			startTime = time.Now()       // 记录开始时间
 		)
+
+		// 初始化播放状态缓存
+		a.forceUpdatePlayingStatus()
 
 		log.Info().
 			Float64("base_time", baseTime).
@@ -286,19 +325,24 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 			case <-ctx.Done():
 				return
 			case <-time.After(sleepDuration):
-				if !player.IsPlaying() {
-
+				if !a.getCachedPlayingStatus() {
 					for {
-						time.Sleep(3 * time.Second)
-						if player.IsPlaying() {
-							log.Info().Msg("Player resumed, restarting lyric scheduler")
-							a.startLyricScheduler(lrc, getCurrentTime)
+						select {
+						case <-ctx.Done():
 							return
+						case <-time.After(3 * time.Second):
+							if a.forceUpdatePlayingStatus() {
+								log.Info().Msg("Player resumed, restarting lyric scheduler")
+								// 重新同步时间基准
+								baseTime = getCurrentTime()
+								startTime = time.Now()
+								goto continueLoop
+							}
+							log.Info().Msg("Player is not playing, waiting...")
 						}
-						log.Info().Msg("Player is not playing, waiting...")
 					}
 				}
-
+			continueLoop:
 				// 继续下一次循环
 			}
 		}
