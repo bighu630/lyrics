@@ -58,6 +58,13 @@ func NewProvider(cacheDir, moduleName, url, apiKey string, redisCfg config.Redis
 		aiClient = openai.NewOpenAi(apiKey, moduleName, url)
 	}
 
+	if redisCfg.Addr == "" {
+		return &Provider{
+			cacheDir:     cacheDir,
+			aiClient:     aiClient,
+			musicManager: musicManager,
+		}, nil
+	}
 	redisClient, err := redis.NewClient(redisCfg.Addr, redisCfg.Password, redisCfg.DB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Redis client: %w", err)
@@ -80,7 +87,9 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	var rawSongInfo string
 	var err error
 	const maxRetries = 3
-	rawSongInfo, err = p.redis.Get(ctx, songIdentifier)
+	if p.redis != nil {
+		rawSongInfo, err = p.redis.Get(ctx, songIdentifier)
+	}
 	if err == nil && rawSongInfo != "" {
 		log.Printf("INFO: Cache HIT for %s. Loading lyrics from Redis.", songIdentifier)
 	} else {
