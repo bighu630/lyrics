@@ -49,20 +49,6 @@ nano ~/.config/lyrics/config.toml
 
 ## 📱 Waybar 配置
 
-### 1. 复制脚本
-
-```bash
-# 复制 Waybar 脚本
-cp waybar_lyrics.sh ~/.local/bin/
-chmod +x ~/.local/bin/waybar_lyrics.sh
-
-# 安装 socat（如果没有）
-sudo pacman -S socat  # Arch Linux
-# 或
-sudo apt install socat  # Ubuntu/Debian
-```
-
-### 2. 配置 Waybar
 
 在 `~/.config/waybar/config` 中添加：
 
@@ -72,7 +58,7 @@ sudo apt install socat  # Ubuntu/Debian
     
     "custom/lyrics": {
         "format": "{}",
-        "exec": "~/.local/bin/waybar_lyrics.sh",
+        "exec": "cat /dev/shm/lyrics",
         "interval": 1,
         "on-click": "lyrics-gui",
         "tooltip": true
