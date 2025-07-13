@@ -260,9 +260,6 @@ func IsPlaying() bool {
 	if mpcStatus == MPCStatusPlaying {
 		log.Debug().Msg("Using MPC - currently playing")
 		return true
-	} else if mpcStatus == MPCStatusPaused {
-		log.Debug().Msg("Using MPC - currently paused")
-		return false
 	}
 
 	// MPC不可用或停止时，检查playerctl
