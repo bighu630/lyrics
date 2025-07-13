@@ -2,11 +2,12 @@ package player
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 // MPCStatus MPC播放状态
@@ -23,7 +24,7 @@ func getMPCStatus() MPCStatus {
 	cmd := exec.Command("mpc", "status")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("DEBUG: MPC not available or error: %v", err)
+		log.Debug().Err(err).Msg("MPC not available or error")
 		return MPCStatusStopped
 	}
 
@@ -49,7 +50,7 @@ func getCurrentSongFromMPC() (string, error) {
 		return "", nil
 	}
 
-	log.Printf("DEBUG: MPC current song: %s", song)
+	log.Debug().Str("song", song).Msg("MPC current song")
 	return song, nil
 }
 
@@ -72,7 +73,7 @@ func getCurrentPlayTimeFromMPC() (float64, error) {
 			if len(matches) >= 2 {
 				currentTime := matches[1]
 				seconds := parseTimeToSeconds(currentTime)
-				log.Printf("DEBUG: MPC current time: %s -> %.2f seconds", currentTime, seconds)
+				log.Debug().Str("time", currentTime).Float64("seconds", seconds).Msg("MPC current time")
 				return seconds, nil
 			}
 		}
@@ -110,7 +111,7 @@ func getCurrentSongFromPlayerctl() (string, error) {
 		return "", err
 	}
 	song := strings.TrimSpace(string(output))
-	log.Printf("DEBUG: Playerctl current song: %s", song)
+	log.Debug().Str("song", song).Msg("Playerctl current song")
 	return song, nil
 }
 
@@ -125,7 +126,7 @@ func getCurrentPlayTimeFromPlayerctl() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	log.Printf("DEBUG: Playerctl current time: %.2f seconds", seconds)
+	log.Debug().Float64("seconds", seconds).Msg("Playerctl current time")
 	return seconds, nil
 }
 
@@ -148,7 +149,7 @@ func getCurrentDurationFromMPC() (float64, error) {
 			if len(matches) >= 3 {
 				totalTime := matches[2]
 				seconds := parseTimeToSeconds(totalTime)
-				log.Printf("DEBUG: MPC total duration: %s -> %.2f seconds", totalTime, seconds)
+				log.Debug().Str("duration", totalTime).Float64("seconds", seconds).Msg("MPC total duration")
 				return seconds, nil
 			}
 		}
@@ -176,7 +177,7 @@ func getCurrentDurationFromPlayerctl() (float64, error) {
 	}
 
 	seconds := float64(us) / 1000000.0
-	log.Printf("DEBUG: Playerctl total duration: %.2f seconds", seconds)
+	log.Debug().Float64("seconds", seconds).Msg("Playerctl total duration")
 	return seconds, nil
 }
 
@@ -184,19 +185,19 @@ func getCurrentDurationFromPlayerctl() (float64, error) {
 func GetCurrentSong() (string, error) {
 	// 首先尝试MPC
 	mpcStatus := getMPCStatus()
-	log.Printf("DEBUG: MPC status: %s", mpcStatus)
+	log.Debug().Str("status", string(mpcStatus)).Msg("MPC status")
 
 	if mpcStatus == MPCStatusPlaying {
 		song, err := getCurrentSongFromMPC()
 		if err == nil && song != "" {
-			log.Printf("INFO: Using MPC for current song: %s", song)
+			log.Info().Str("song", song).Msg("Using MPC for current song")
 			return song, nil
 		}
-		log.Printf("WARN: MPC is playing but failed to get song info: %v", err)
+		log.Warn().Err(err).Msg("MPC is playing but failed to get song info")
 	}
 
 	// MPC不可用、暂停或出错时，使用playerctl
-	log.Printf("INFO: Falling back to playerctl for current song")
+	log.Info().Msg("Falling back to playerctl for current song")
 	return getCurrentSongFromPlayerctl()
 }
 
@@ -208,20 +209,20 @@ func GetCurrentPlayTime() float64 {
 	if mpcStatus == MPCStatusPlaying {
 		time, err := getCurrentPlayTimeFromMPC()
 		if err == nil {
-			log.Printf("DEBUG: Using MPC for current time: %.2f", time)
+			log.Debug().Float64("time", time).Msg("Using MPC for current time")
 			return time
 		}
-		log.Printf("WARN: MPC is playing but failed to get time: %v", err)
+		log.Warn().Err(err).Msg("MPC is playing but failed to get time")
 	}
 
 	// MPC不可用、暂停或出错时，使用playerctl
 	time, err := getCurrentPlayTimeFromPlayerctl()
 	if err != nil {
-		log.Printf("WARN: Playerctl failed to get time: %v", err)
+		log.Warn().Err(err).Msg("Playerctl failed to get time")
 		return 0
 	}
 
-	log.Printf("DEBUG: Using playerctl for current time: %.2f", time)
+	log.Debug().Float64("time", time).Msg("Using playerctl for current time")
 	return time
 }
 
@@ -233,20 +234,20 @@ func GetCurrentDuration() float64 {
 	if mpcStatus == MPCStatusPlaying || mpcStatus == MPCStatusPaused {
 		duration, err := getCurrentDurationFromMPC()
 		if err == nil && duration > 0 {
-			log.Printf("DEBUG: Using MPC for duration: %.2f", duration)
+			log.Debug().Float64("duration", duration).Msg("Using MPC for duration")
 			return duration
 		}
-		log.Printf("WARN: MPC failed to get duration: %v", err)
+		log.Warn().Err(err).Msg("MPC failed to get duration")
 	}
 
 	// MPC不可用或出错时，使用playerctl
 	duration, err := getCurrentDurationFromPlayerctl()
 	if err != nil {
-		log.Printf("WARN: Playerctl failed to get duration: %v", err)
+		log.Warn().Err(err).Msg("Playerctl failed to get duration")
 		return 0
 	}
 
-	log.Printf("DEBUG: Using playerctl for duration: %.2f", duration)
+	log.Debug().Float64("duration", duration).Msg("Using playerctl for duration")
 	return duration
 }
 
@@ -254,29 +255,29 @@ func GetCurrentDuration() float64 {
 func IsPlaying() bool {
 	// 首先尝试MPC
 	mpcStatus := getMPCStatus()
-	log.Printf("DEBUG: MPC status check: %s", mpcStatus)
+	log.Debug().Str("status", string(mpcStatus)).Msg("MPC status check")
 
 	if mpcStatus == MPCStatusPlaying {
-		log.Printf("DEBUG: Using MPC - currently playing")
+		log.Debug().Msg("Using MPC - currently playing")
 		return true
 	} else if mpcStatus == MPCStatusPaused {
-		log.Printf("DEBUG: Using MPC - currently paused")
+		log.Debug().Msg("Using MPC - currently paused")
 		return false
 	}
 
 	// MPC不可用或停止时，检查playerctl
-	log.Printf("DEBUG: MPC not available/stopped, checking playerctl")
+	log.Debug().Msg("MPC not available/stopped, checking playerctl")
 
 	cmd := exec.Command("playerctl", "status")
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("WARN: Playerctl status check failed: %v", err)
+		log.Warn().Err(err).Msg("Playerctl status check failed")
 		return false
 	}
 
 	status := strings.TrimSpace(string(output))
 	isPlaying := strings.ToLower(status) == "playing"
 
-	log.Printf("DEBUG: Playerctl status: %s, playing: %t", status, isPlaying)
+	log.Debug().Str("status", status).Bool("playing", isPlaying).Msg("Playerctl status")
 	return isPlaying
 }

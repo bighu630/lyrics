@@ -526,7 +526,21 @@ bind = SUPER CTRL, L, exec, pkill lyrics-backend; pkill lyrics-gui; sleep 1; lyr
 
 系统支持集成到 Waybar 状态栏，以紧凑的方式显示当前歌词。
 
-### 1. Waybar 配置
+### 1. 准备脚本文件
+
+首先复制歌词脚本到合适位置：
+
+```bash
+# 复制脚本到用户 bin 目录
+cp waybar_lyrics.sh ~/.local/bin/
+chmod +x ~/.local/bin/waybar_lyrics.sh
+
+# 或者复制到系统 bin 目录
+sudo cp waybar_lyrics.sh /usr/local/bin/
+sudo chmod +x /usr/local/bin/waybar_lyrics.sh
+```
+
+### 2. Waybar 配置
 
 在 `~/.config/waybar/config` 中添加歌词模块：
 
@@ -537,149 +551,205 @@ bind = SUPER CTRL, L, exec, pkill lyrics-backend; pkill lyrics-gui; sleep 1; lyr
     "modules-right": ["clock", "tray"],
     
     "custom/lyrics": {
-        "format": "   {}   ",
-        "exec": "awk '{print substr($0, 1, 30)}' /tmp/lyrics",
+        "format": "{}",
+        "exec": "~/.local/bin/waybar_lyrics.sh",
         "interval": 1,
         "return-type": "text",
-        "on-click": "notify-send '歌词' \"$(cat /tmp/lyrics)\"",
+        "on-click": "lyrics-gui",
+        "on-click-right": "notify-send '歌词提示' '点击左键打开歌词窗口'",
         "tooltip": true,
-        "tooltip-format": "{}"
+        "tooltip-format": "当前歌词: {}"
     }
 }
 ```
 
-### 2. Waybar 样式配置
+### 3. Waybar 样式配置
 
 在 `~/.config/waybar/style.css` 中自定义歌词样式：
 
 ```css
 /* 歌词模块样式 */
-#custom-lyrics{
-  background: linear-gradient(
-    to right,
-    rgba(51, 204, 255, 0.6),
-    rgba(0, 255, 153, 0.7)
-
-  );
+#custom-lyrics {
+    background: linear-gradient(
+        to right,
+        rgba(51, 204, 255, 0.6),
+        rgba(0, 255, 153, 0.7)
+    );
     color: white;
-    padding: 1px 2px;
+    padding: 4px 8px;
     font-size: 14px;
     border-radius: 10px;
     font-weight: bold;
+    margin: 0 5px;
+    min-width: 200px;
+    text-align: center;
+}
+
+#custom-lyrics:hover {
+    background: linear-gradient(
+        to right,
+        rgba(51, 204, 255, 0.8),
+        rgba(0, 255, 153, 0.9)
+    );
 }
 ```
 
-### 3. 功能特性
+### 4. 功能特性
 
 #### 基本功能
-- **实时显示**: 每秒更新一次当前歌词
-- **长度限制**: 自动截取前30个字符，避免状态栏溢出
-- **点击交互**: 点击歌词模块显示完整歌词通知
+- **实时显示**: 每秒通过 IPC 获取最新歌词
+- **长度限制**: 自动截取前50个字符，避免状态栏溢出
+- **点击交互**: 左键点击启动歌词窗口
 - **工具提示**: 鼠标悬停显示完整歌词内容
+- **连接状态**: 未连接时显示音乐图标
 
 #### 高级配置选项
 
 ```json
 "custom/lyrics": {
-    "format": "🎵 {}",                              // 添加音乐图标
-    "exec": "awk '{print substr($0, 1, 25)}' /tmp/lyrics", // 调整显示长度
-    "interval": 1,                                // 更频繁的更新 (1秒)
-    "return-type": "text",
-    "on-click": "lyrics-gui",                       // 点击启动歌词窗口
-    "on-click-right": "notify-send '完整歌词' \"$(cat /tmp/lyrics)\"", // 右键显示完整歌词
-    "tooltip": true,
-    "tooltip-format": "当前歌词: {}",
-    "max-length": 50,                               // Waybar 内置长度限制
-    "escape": true                                  // 转义特殊字符
-}
-```
-
-### 4. 集成方式说明
-
-#### 数据流向
-```
-播放器 → lyrics-backend → /tmp/lyrics 文件 → Waybar 读取显示
-```
-
-#### 文件更新机制
-- 后端服务将当前歌词实时写入 `/tmp/lyrics` 文件
-- Waybar 通过 `awk` 命令定期读取并格式化显示
-- 支持中文字符正确计数和截取
-
-#### 错误处理
-```json
-"custom/lyrics": {
-    "format": "   {}   ",
-    "exec": "if [ -f /tmp/lyrics ]; then awk '{print substr($0, 1, 30)}' /tmp/lyrics 2>/dev/null || echo '♪ 无歌词'; else echo '♪ 未连接'; fi",
-    "interval": 1,
-    "return-type": "text"
-}
-```
-
-### 5. 故障排除
-
-#### 常见问题
-
-**问题 1: Waybar 不显示歌词**
-```bash
-# 检查歌词文件是否存在
-ls -la /tmp/lyrics
-
-# 手动测试命令
-awk '{print substr($0, 1, 30)}' /tmp/lyrics
-
-# 检查文件权限
-chmod 644 /tmp/lyrics
-```
-
-**问题 2: 中文字符显示异常**
-```bash
-# 确保系统支持中文字体
-fc-list :lang=zh
-
-# 在 Waybar 配置中指定中文字体
-"font-family": "Noto Sans CJK SC"
-```
-
-**问题 3: 更新频率过高导致性能问题**
-```json
-// 降低更新频率
-"interval": 2,  // 改为2秒更新一次
-
-// 或者使用信号更新模式 (需要修改后端)
-"signal": 10,   // 使用 USR1 信号触发更新
-"interval": "once"
-```
-
-### 6. 最佳实践
-
-#### 性能优化
-- 合理设置更新间隔 (推荐1-2秒)
-- 限制显示长度避免占用过多状态栏空间
-- 使用高效的文本处理命令
-
-#### 用户体验
-- 添加音乐图标增强视觉效果
-- 配置工具提示显示完整信息
-- 设置点击交互提供更多功能
-
-#### 集成建议
-```json
-// 完整的推荐配置
-"custom/lyrics": {
-    "format": "🎵 {}",
-    "exec": "[ -f /tmp/lyrics ] && awk '{print substr($0, 1, 25)}' /tmp/lyrics || echo '未播放'",
+    "format": "{}",
+    "exec": "~/.local/bin/waybar_lyrics.sh",
     "interval": 1,
     "return-type": "text",
     "on-click": "lyrics-gui",
-    "on-click-right": "notify-send '当前歌词' \"$(cat /tmp/lyrics 2>/dev/null || echo '无歌词信息')\"",
+    "on-click-right": "pkill lyrics-gui",
+    "on-click-middle": "pkill lyrics-backend; lyrics-backend &",
     "tooltip": true,
     "tooltip-format": "{}",
-    "max-length": 30
+    "max-length": 60,
+    "escape": true
 }
 ```
 
-这样配置后，您就可以在 Waybar 中实时查看歌词，同时保持状态栏的简洁性。
+#### 自定义脚本选项
+
+您可以修改 `waybar_lyrics.sh` 脚本来自定义显示：
+
+```bash
+#!/bin/bash
+# 自定义版本示例
+LYRICS=$(timeout 0.01 socat UNIX-CONNECT:/tmp/lyrics_app.sock STDOUT 2>/dev/null | tail -n 1)
+
+if [ -n "$LYRICS" ] && [ "$LYRICS" != "Waiting for lyrics..." ]; then
+    # 更长的显示长度
+    if [ ${#LYRICS} -gt 80 ]; then
+        echo "🎵 ${LYRICS:0:77}..."
+    else
+        echo "🎵 $LYRICS"
+    fi
+else
+    # 不同的无歌词状态显示
+    echo "🎵 暂无歌词"
+fi
+```
+
+### 5. 数据流向说明
+
+#### 新的数据流向
+```
+播放器 → lyrics-backend → IPC Socket → waybar_lyrics.sh → Waybar 显示
+```
+
+#### 优势对比
+| 方案 | 延迟 | 准确性 | 资源占用 | 可靠性 |
+|------|------|--------|----------|--------|
+| 文件读取 | 高 | 中 | 低 | 中 |
+| IPC 直连 | 低 | 高 | 中 | 高 |
+
+#### 脚本工作原理
+1. 使用 `socat` 连接到后端 IPC socket
+2. 设置短超时避免阻塞 Waybar
+3. 获取最新的歌词行
+4. 格式化输出，限制长度
+5. 处理无歌词状态
+
+### 6. 故障排除
+
+#### 常见问题
+
+**问题 1: Waybar 显示空白**
+```bash
+# 测试脚本是否工作
+~/.local/bin/waybar_lyrics.sh
+
+# 检查 socat 是否安装
+which socat || sudo pacman -S socat
+
+# 检查后端是否运行
+ps aux | grep lyrics-backend
+```
+
+**问题 2: 脚本权限问题**
+```bash
+# 确保脚本可执行
+chmod +x ~/.local/bin/waybar_lyrics.sh
+
+# 检查脚本路径
+ls -la ~/.local/bin/waybar_lyrics.sh
+```
+
+**问题 3: IPC 连接失败**
+```bash
+# 测试 IPC 连接
+echo "" | socat UNIX-CONNECT:/tmp/lyrics_app.sock STDOUT
+
+# 检查 socket 文件
+ls -la /tmp/lyrics_app.sock
+```
+
+**问题 4: 中文字符截取异常**
+脚本已使用字符级别截取，如遇问题可使用字节级别：
+```bash
+# 在脚本中替换截取方式
+echo "♪ $(echo "$LYRICS" | head -c 100)..."
+```
+
+### 7. 性能优化
+
+#### 减少资源占用
+```json
+// 降低更新频率
+"interval": 2,  // 2秒更新一次
+
+// 或使用信号触发模式（需要后端支持）
+"signal": 10,
+"interval": "once"
+```
+
+#### 脚本优化
+```bash
+#!/bin/bash
+# 优化版本 - 减少子进程调用
+exec 3< <(timeout 0.01 socat UNIX-CONNECT:/tmp/lyrics_app.sock STDOUT 2>/dev/null)
+read -u 3 LYRICS
+exec 3<&-
+
+[ -n "$LYRICS" ] && [ "$LYRICS" != "Waiting for lyrics..." ] && 
+    echo "♪ ${LYRICS:0:47}" || echo "♪"
+```
+
+### 8. 最佳实践
+
+#### 推荐配置
+```json
+"custom/lyrics": {
+    "format": "{}",
+    "exec": "~/.local/bin/waybar_lyrics.sh",
+    "interval": 1,
+    "return-type": "text",
+    "on-click": "lyrics-gui",
+    "tooltip": true,
+    "max-length": 60
+}
+```
+
+#### 集成建议
+- 将脚本放在 `~/.local/bin/` 目录
+- 设置合理的更新间隔（1-2秒）
+- 配置点击交互增强用户体验
+- 使用工具提示显示完整信息
+
+这样配置后，Waybar 将通过 IPC 直接获取歌词，提供更快的响应速度和更准确的同步。
 
 ## 🐛 常见问题
 
