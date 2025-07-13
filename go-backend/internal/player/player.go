@@ -249,3 +249,34 @@ func GetCurrentDuration() float64 {
 	log.Printf("DEBUG: Using playerctl for duration: %.2f", duration)
 	return duration
 }
+
+// IsPlaying 获取当前播放状态，返回是否正在播放
+func IsPlaying() bool {
+	// 首先尝试MPC
+	mpcStatus := getMPCStatus()
+	log.Printf("DEBUG: MPC status check: %s", mpcStatus)
+
+	if mpcStatus == MPCStatusPlaying {
+		log.Printf("DEBUG: Using MPC - currently playing")
+		return true
+	} else if mpcStatus == MPCStatusPaused {
+		log.Printf("DEBUG: Using MPC - currently paused")
+		return false
+	}
+
+	// MPC不可用或停止时，检查playerctl
+	log.Printf("DEBUG: MPC not available/stopped, checking playerctl")
+
+	cmd := exec.Command("playerctl", "status")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("WARN: Playerctl status check failed: %v", err)
+		return false
+	}
+
+	status := strings.TrimSpace(string(output))
+	isPlaying := strings.ToLower(status) == "playing"
+
+	log.Printf("DEBUG: Playerctl status: %s, playing: %t", status, isPlaying)
+	return isPlaying
+}

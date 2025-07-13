@@ -286,6 +286,19 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 			case <-ctx.Done():
 				return
 			case <-time.After(sleepDuration):
+				if !player.IsPlaying() {
+
+					for {
+						time.Sleep(3 * time.Second)
+						if player.IsPlaying() {
+							log.Info().Msg("Player resumed, restarting lyric scheduler")
+							a.startLyricScheduler(lrc, getCurrentTime)
+							return
+						}
+						log.Info().Msg("Player is not playing, waiting...")
+					}
+				}
+
 				// 继续下一次循环
 			}
 		}
