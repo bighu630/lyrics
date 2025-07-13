@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"go-backend/pkg/lrclib"
-	"log"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Provider 音乐提供商类型
@@ -21,6 +22,8 @@ const (
 	ProviderKugou Provider = "kugou"
 )
 
+var logger = log.With().Str("component", "music-manager").Logger()
+
 // Manager 音乐API管理器
 type Manager struct {
 	providers []MusicAPI
@@ -30,12 +33,15 @@ type Manager struct {
 // NewManager 创建新的音乐API管理器
 func NewManager(providers []MusicAPI) *Manager {
 	if len(providers) == 0 {
-		log.Printf("WARN: No music providers configured")
+		logger.Warn().Msg("No music providers configured")
 		return &Manager{}
 	}
 
 	primary := providers[0]
-	log.Printf("INFO: Music API Manager initialized with %d providers, primary: %s", len(providers), primary.GetProviderName())
+	logger.Info().
+		Int("provider_count", len(providers)).
+		Str("primary_provider", primary.GetProviderName()).
+		Msg("Music API Manager initialized")
 
 	return &Manager{
 		providers: providers,
@@ -51,15 +57,24 @@ func (m *Manager) SearchSong(ctx context.Context, title, artist string) (string,
 
 	var lastErr error
 	for i, provider := range m.providers {
-		log.Printf("INFO: Trying provider %s (%d/%d)", provider.GetProviderName(), i+1, len(m.providers))
+		logger.Info().
+			Str("provider", provider.GetProviderName()).
+			Int("attempt", i+1).
+			Int("total_providers", len(m.providers)).
+			Msg("Trying provider")
 
 		songID, err := provider.SearchSong(ctx, title, artist)
 		if err == nil {
-			log.Printf("INFO: Successfully found song with provider %s", provider.GetProviderName())
+			logger.Info().
+				Str("provider", provider.GetProviderName()).
+				Msg("Successfully found song")
 			return songID, nil
 		}
 
-		log.Printf("WARN: Provider %s failed: %v", provider.GetProviderName(), err)
+		logger.Warn().
+			Str("provider", provider.GetProviderName()).
+			Err(err).
+			Msg("Provider failed")
 		lastErr = err
 	}
 
@@ -74,15 +89,24 @@ func (m *Manager) GetLyrics(ctx context.Context, songID string) (string, error) 
 
 	var lastErr error
 	for i, provider := range m.providers {
-		log.Printf("INFO: Trying to get lyrics from provider %s (%d/%d)", provider.GetProviderName(), i+1, len(m.providers))
+		logger.Info().
+			Str("provider", provider.GetProviderName()).
+			Int("attempt", i+1).
+			Int("total_providers", len(m.providers)).
+			Msg("Trying to get lyrics from provider")
 
 		lyrics, err := provider.GetLyrics(ctx, songID)
 		if err == nil {
-			log.Printf("INFO: Successfully got lyrics from provider %s", provider.GetProviderName())
+			logger.Info().
+				Str("provider", provider.GetProviderName()).
+				Msg("Successfully got lyrics")
 			return lyrics, nil
 		}
 
-		log.Printf("WARN: Provider %s failed: %v", provider.GetProviderName(), err)
+		logger.Warn().
+			Str("provider", provider.GetProviderName()).
+			Err(err).
+			Msg("Provider failed")
 		lastErr = err
 	}
 
@@ -97,17 +121,23 @@ func (m *Manager) GetLyricsByInfo(ctx context.Context, title, artist string, dur
 
 	var lastErr error
 	for i, provider := range m.providers {
-		log.Printf("INFO: Trying to get lyrics for '%s - %s' (duration: %.2fs) from provider %s (%d/%d)",
-			title, artist, duration, provider.GetProviderName(), i+1, len(m.providers))
+		logger.Info().
+			Str("title", title).
+			Str("artist", artist).
+			Float64("duration", duration).
+			Str("provider", provider.GetProviderName()).
+			Int("attempt", i+1).
+			Int("total_providers", len(m.providers)).
+			Msg("Trying to get lyrics")
 
 		// 检查是否为LRCLib客户端并支持带时长的歌词查询
 		if lrcClient, ok := provider.(*lrclib.Client); ok && duration > 0 {
 			lyrics, err := lrcClient.GetLyricsByInfo(ctx, title, artist, duration)
 			if err == nil {
-				log.Printf("INFO: Successfully got lyrics from LRCLib using duration")
+				logger.Info().Msg("Successfully got lyrics from LRCLib using duration")
 				return lyrics, nil
 			}
-			log.Printf("WARN: LRCLib with duration failed: %v", err)
+			logger.Warn().Err(err).Msg("LRCLib with duration failed")
 			lastErr = err
 			continue
 		}
@@ -115,7 +145,10 @@ func (m *Manager) GetLyricsByInfo(ctx context.Context, title, artist string, dur
 		// 普通API流程：搜索歌曲
 		songID, err := provider.SearchSong(ctx, title, artist)
 		if err != nil {
-			log.Printf("WARN: Provider %s search failed: %v", provider.GetProviderName(), err)
+			logger.Warn().
+				Str("provider", provider.GetProviderName()).
+				Err(err).
+				Msg("Provider search failed")
 			lastErr = err
 			continue
 		}
@@ -123,12 +156,20 @@ func (m *Manager) GetLyricsByInfo(ctx context.Context, title, artist string, dur
 		// 获取歌词
 		lyrics, err := provider.GetLyrics(ctx, songID)
 		if err != nil {
-			log.Printf("WARN: Provider %s get lyrics failed for ID %s: %v", provider.GetProviderName(), songID, err)
+			logger.Warn().
+				Str("provider", provider.GetProviderName()).
+				Str("song_id", songID).
+				Err(err).
+				Msg("Provider get lyrics failed")
 			lastErr = err
 			continue
 		}
 
-		log.Printf("INFO: Successfully got lyrics for '%s - %s' from provider %s", title, artist, provider.GetProviderName())
+		logger.Info().
+			Str("title", title).
+			Str("artist", artist).
+			Str("provider", provider.GetProviderName()).
+			Msg("Successfully got lyrics")
 		return lyrics, nil
 	}
 

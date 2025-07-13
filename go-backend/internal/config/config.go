@@ -1,12 +1,12 @@
 package config
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -79,6 +79,8 @@ type Config struct {
 	Redis RedisConfig
 }
 
+var logger = log.With().Str("component", "config").Logger()
+
 // getConfigPath 获取配置文件路径
 func getConfigPath() string {
 	// 优先使用 XDG_CONFIG_HOME 环境变量
@@ -89,7 +91,7 @@ func getConfigPath() string {
 	// 否则使用用户主目录下的 .config
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("WARN: Cannot get user home directory: %v", err)
+		logger.Warn().Err(err).Msg("Cannot get user home directory")
 		return "config.toml" // 回退到当前目录
 	}
 
@@ -102,7 +104,7 @@ func loadTomlConfig() (*TomlConfig, error) {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		log.Printf("INFO: Config file not found at %s, using defaults", configPath)
+		logger.Info().Str("config_path", configPath).Msg("Config file not found, using defaults")
 		return &TomlConfig{}, nil
 	}
 
@@ -111,7 +113,7 @@ func loadTomlConfig() (*TomlConfig, error) {
 		return nil, err
 	}
 
-	log.Printf("INFO: Loaded config from %s", configPath)
+	logger.Info().Str("config_path", configPath).Msg("Loaded config")
 	return &config, nil
 }
 
@@ -119,8 +121,8 @@ func Load() *Config {
 	// 加载TOML配置文件
 	tomlConfig, err := loadTomlConfig()
 	if err != nil {
-		log.Printf("ERROR: Failed to load config file: %v", err)
-		log.Printf("INFO: Using default configuration")
+		logger.Error().Err(err).Msg("Failed to load config file")
+		logger.Info().Msg("Using default configuration")
 		tomlConfig = &TomlConfig{}
 	}
 
@@ -152,7 +154,9 @@ func Load() *Config {
 		if duration, err := time.ParseDuration(tomlConfig.App.CheckInterval); err == nil {
 			config.App.CheckInterval = duration
 		} else {
-			log.Printf("WARN: Invalid check_interval format '%s', using default", tomlConfig.App.CheckInterval)
+			logger.Warn().
+				Str("check_interval", tomlConfig.App.CheckInterval).
+				Msg("Invalid check_interval format, using default")
 		}
 	}
 
@@ -188,11 +192,10 @@ func Load() *Config {
 
 	// 检查必要的配置
 	if config.AI.APIKey == "" {
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-		log.Println("!!! WARNING: No AI API key configured in config.toml.         !!!")
-		log.Printf("!!! Please set ai.api_key in %s", getConfigPath())
-		log.Println("!!! The application will not be able to fetch lyrics.         !!!")
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		configPath := getConfigPath()
+		logger.Warn().
+			Str("config_path", configPath).
+			Msg("No AI API key configured - please set ai.api_key in config file. The application will not be able to fetch lyrics.")
 	}
 
 	return config
