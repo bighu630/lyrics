@@ -522,6 +522,165 @@ bind = SUPER SHIFT, L, exec, pkill lyrics-backend && sleep 1 && lyrics-backend
 bind = SUPER CTRL, L, exec, pkill lyrics-backend; pkill lyrics-gui; sleep 1; lyrics-backend & sleep 2 && lyrics-gui
 ```
 
+## 📊 Waybar 集成
+
+系统支持集成到 Waybar 状态栏，以紧凑的方式显示当前歌词。
+
+### 1. Waybar 配置
+
+在 `~/.config/waybar/config` 中添加歌词模块：
+
+```json
+{
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["custom/lyrics"],
+    "modules-right": ["clock", "tray"],
+    
+    "custom/lyrics": {
+        "format": "   {}   ",
+        "exec": "awk '{print substr($0, 1, 30)}' /tmp/lyrics",
+        "interval": 1,
+        "return-type": "text",
+        "on-click": "notify-send '歌词' \"$(cat /tmp/lyrics)\"",
+        "tooltip": true,
+        "tooltip-format": "{}"
+    }
+}
+```
+
+### 2. Waybar 样式配置
+
+在 `~/.config/waybar/style.css` 中自定义歌词样式：
+
+```css
+/* 歌词模块样式 */
+#custom-lyrics{
+  background: linear-gradient(
+    to right,
+    rgba(51, 204, 255, 0.6),
+    rgba(0, 255, 153, 0.7)
+
+  );
+    color: white;
+    padding: 1px 2px;
+    font-size: 14px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+```
+
+### 3. 功能特性
+
+#### 基本功能
+- **实时显示**: 每秒更新一次当前歌词
+- **长度限制**: 自动截取前30个字符，避免状态栏溢出
+- **点击交互**: 点击歌词模块显示完整歌词通知
+- **工具提示**: 鼠标悬停显示完整歌词内容
+
+#### 高级配置选项
+
+```json
+"custom/lyrics": {
+    "format": "🎵 {}",                              // 添加音乐图标
+    "exec": "awk '{print substr($0, 1, 25)}' /tmp/lyrics", // 调整显示长度
+    "interval": 1,                                // 更频繁的更新 (1秒)
+    "return-type": "text",
+    "on-click": "lyrics-gui",                       // 点击启动歌词窗口
+    "on-click-right": "notify-send '完整歌词' \"$(cat /tmp/lyrics)\"", // 右键显示完整歌词
+    "tooltip": true,
+    "tooltip-format": "当前歌词: {}",
+    "max-length": 50,                               // Waybar 内置长度限制
+    "escape": true                                  // 转义特殊字符
+}
+```
+
+### 4. 集成方式说明
+
+#### 数据流向
+```
+播放器 → lyrics-backend → /tmp/lyrics 文件 → Waybar 读取显示
+```
+
+#### 文件更新机制
+- 后端服务将当前歌词实时写入 `/tmp/lyrics` 文件
+- Waybar 通过 `awk` 命令定期读取并格式化显示
+- 支持中文字符正确计数和截取
+
+#### 错误处理
+```json
+"custom/lyrics": {
+    "format": "   {}   ",
+    "exec": "if [ -f /tmp/lyrics ]; then awk '{print substr($0, 1, 30)}' /tmp/lyrics 2>/dev/null || echo '♪ 无歌词'; else echo '♪ 未连接'; fi",
+    "interval": 1,
+    "return-type": "text"
+}
+```
+
+### 5. 故障排除
+
+#### 常见问题
+
+**问题 1: Waybar 不显示歌词**
+```bash
+# 检查歌词文件是否存在
+ls -la /tmp/lyrics
+
+# 手动测试命令
+awk '{print substr($0, 1, 30)}' /tmp/lyrics
+
+# 检查文件权限
+chmod 644 /tmp/lyrics
+```
+
+**问题 2: 中文字符显示异常**
+```bash
+# 确保系统支持中文字体
+fc-list :lang=zh
+
+# 在 Waybar 配置中指定中文字体
+"font-family": "Noto Sans CJK SC"
+```
+
+**问题 3: 更新频率过高导致性能问题**
+```json
+// 降低更新频率
+"interval": 2,  // 改为2秒更新一次
+
+// 或者使用信号更新模式 (需要修改后端)
+"signal": 10,   // 使用 USR1 信号触发更新
+"interval": "once"
+```
+
+### 6. 最佳实践
+
+#### 性能优化
+- 合理设置更新间隔 (推荐1-2秒)
+- 限制显示长度避免占用过多状态栏空间
+- 使用高效的文本处理命令
+
+#### 用户体验
+- 添加音乐图标增强视觉效果
+- 配置工具提示显示完整信息
+- 设置点击交互提供更多功能
+
+#### 集成建议
+```json
+// 完整的推荐配置
+"custom/lyrics": {
+    "format": "🎵 {}",
+    "exec": "[ -f /tmp/lyrics ] && awk '{print substr($0, 1, 25)}' /tmp/lyrics || echo '未播放'",
+    "interval": 1,
+    "return-type": "text",
+    "on-click": "lyrics-gui",
+    "on-click-right": "notify-send '当前歌词' \"$(cat /tmp/lyrics 2>/dev/null || echo '无歌词信息')\"",
+    "tooltip": true,
+    "tooltip-format": "{}",
+    "max-length": 30
+}
+```
+
+这样配置后，您就可以在 Waybar 中实时查看歌词，同时保持状态栏的简洁性。
+
 ## 🐛 常见问题
 
 ### Q: 歌词窗口不显示或显示异常
@@ -612,7 +771,7 @@ LOG_LEVEL=debug make run-backend
 ```
 
 ### 测试环境
-- 确保有音乐播放器在运行 (Spotify, Chrome 播放音乐等)
+- 确保有音乐播放器在运行 (Spotify, Chrome 播音乐等)
 - 确保网络连接正常
 - 确保 Gemini API 密钥有效
 

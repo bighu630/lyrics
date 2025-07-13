@@ -139,7 +139,6 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 		a.schedulerCancel = nil
 
 		// 为了确保旧调度器有时间退出，等待一小段时间
-		// 这个短暂等待不会影响用户体验，但确保资源正确释放
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -158,20 +157,13 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 	a.schedulerActive = true
 
 	go func() {
-		// 防止goroutine泄漏
-		// 通过闭包我们已经捕获了cancel函数和上下文
-
 		defer func() {
 			a.schedulerMutex.Lock()
 			a.schedulerActive = false
-			// 只有当这是最新的调度器时才清除（通过闭包捕获的方式进行比较）
 			select {
 			case <-ctx.Done():
-				// 如果上下文已被取消，则说明这个调度器被停止了
 				log.Debug().Msg("Cleaning up cancelled scheduler")
 			default:
-				// 如果上下文尚未取消，说明这是最新的调度器被自然结束（如歌曲结束）
-				// 这时才清除schedulerCancel引用
 				log.Debug().Msg("Cleaning up finished scheduler")
 				a.schedulerCancel = nil
 			}
@@ -180,85 +172,130 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 		}()
 
 		var (
-			lastIndex = -2 // 确保第一次广播
+			lastIndex = -2               // 确保第一次广播
+			baseTime  = getCurrentTime() // 获取基准时间
+			startTime = time.Now()       // 记录开始时间
 		)
 
-		// 主循环：每50ms检查一次
-		ticker := time.NewTicker(50 * time.Millisecond)
-		defer ticker.Stop()
-
-		log.Info().Msg("Lyric scheduler started with real-time sync")
+		log.Info().
+			Float64("base_time", baseTime).
+			Msg("Lyric scheduler started with optimized timing")
 
 		for {
 			select {
-			case <-ticker.C:
-				// 每次都重新获取播放器时间，避免累积误差
-				currentTime := getCurrentTime()
-
-				// 处理异常时间
-				if currentTime < 0 {
-					log.Warn().Float64("player_time", currentTime).Msg("Invalid player time")
-					continue
-				}
-
-				// 查找当前时间对应的歌词（提前0.5秒显示）
-				lookupTime := currentTime + timeShit // 提前0.5秒查找歌词
-				newIndex := getLyricIndexAtTime(lines, lookupTime)
-
-				// 只有索引改变时才处理
-				if newIndex != lastIndex {
-					if newIndex >= 0 && newIndex < len(lines) {
-						lyric := lines[newIndex]
-						// 计算时间差时考虑0.5秒的提前量
-						timeDiff := (currentTime - lyric.Time + timeShit) * 1000 // 转换为毫秒
-
-						// 调整时间窗口：考虑0.5秒提前，允许-100ms到+100ms的误差
-						if timeDiff >= -100 && timeDiff <= 100 { // 允许100ms的前后误差
-							log.Info().
-								Int("index", newIndex).
-								Float64("player_time", currentTime).
-								Float64("lyric_time", lyric.Time).
-								Float64("time_diff_ms", timeDiff).
-								Str("lyric", lyric.Text).
-								Msg("Broadcasting lyric")
-
-							a.ipcServer.Broadcast(lyric.Text)
-						} else {
-							// 如果超出时间窗口，记录警告但仍然广播
-							log.Warn().
-								Int("index", newIndex).
-								Float64("player_time", currentTime).
-								Float64("lyric_time", lyric.Time).
-								Float64("time_diff_ms", timeDiff).
-								Str("lyric", lyric.Text).
-								Msg("Lyric timing outside window, but broadcasting anyway")
-
-							a.ipcServer.Broadcast(lyric.Text)
-						}
-					} else if newIndex == -1 && currentTime+timeShit < lines[0].Time {
-						// 在第一句歌词之前
-						if lastIndex != -1 {
-							a.ipcServer.Broadcast("♪ 即将开始... ♪")
-						}
-					}
-
-					lastIndex = newIndex
-				}
-
-				// 检查歌曲是否结束
-				if len(lines) > 0 && currentTime > lines[len(lines)-1].Time+5.0 {
-					log.Info().
-						Float64("current_time", currentTime).
-						Float64("last_lyric_time", lines[len(lines)-1].Time).
-						Msg("Song finished")
-					a.ipcServer.Broadcast("♪ 歌曲结束 ♪")
-					return
-				}
-
 			case <-ctx.Done():
 				log.Info().Msg("Lyric scheduler cancelled")
 				return
+			default:
+			}
+
+			// 计算当前播放时间（基于基准时间和经过的时间）
+			elapsed := time.Since(startTime).Seconds()
+			currentTime := baseTime + elapsed
+
+			// 查找当前时间对应的歌词（提前timeShit秒显示）
+			lookupTime := currentTime + timeShit
+			newIndex := getLyricIndexAtTime(lines, lookupTime)
+
+			// 只有索引改变时才处理
+			if newIndex != lastIndex {
+				if newIndex >= 0 && newIndex < len(lines) {
+					lyric := lines[newIndex]
+					timeDiff := (currentTime - lyric.Time + timeShit) * 1000
+
+					log.Info().
+						Int("index", newIndex).
+						Float64("current_time", currentTime).
+						Float64("lyric_time", lyric.Time).
+						Float64("time_diff_ms", timeDiff).
+						Str("lyric", lyric.Text).
+						Msg("Broadcasting lyric")
+
+					a.ipcServer.Broadcast(lyric.Text)
+				} else if newIndex == -1 && currentTime+timeShit < lines[0].Time {
+					if lastIndex != -1 {
+						a.ipcServer.Broadcast("♪ 即将开始... ♪")
+					}
+				}
+
+				lastIndex = newIndex
+			}
+
+			// 检查歌曲是否结束
+			if len(lines) > 0 && currentTime > lines[len(lines)-1].Time+5.0 {
+				log.Info().
+					Float64("current_time", currentTime).
+					Float64("last_lyric_time", lines[len(lines)-1].Time).
+					Msg("Song finished")
+				a.ipcServer.Broadcast("♪ 歌曲结束 ♪")
+				return
+			}
+
+			// 计算到下一句歌词的时间差，智能休眠
+			var sleepDuration time.Duration
+
+			// 找到下一句歌词
+			nextIndex := newIndex + 1
+			if nextIndex < len(lines) {
+				// 计算到下一句歌词的时间
+				nextLyricTime := lines[nextIndex].Time - timeShit // 减去提前量
+				timeToNext := nextLyricTime - currentTime
+
+				if timeToNext > 0.5 {
+					// 如果距离下一句歌词超过0.5秒，休眠大部分时间，但保留100ms用于精确控制
+					sleepDuration = time.Duration((timeToNext-0.1)*1000) * time.Millisecond
+				} else if timeToNext > 0.1 {
+					// 如果距离较近，休眠较短时间
+					sleepDuration = time.Duration((timeToNext*0.5)*1000) * time.Millisecond
+				} else {
+					// 如果非常接近或已过时，短暂休眠
+					sleepDuration = 20 * time.Millisecond
+				}
+			} else {
+				// 没有更多歌词，使用默认间隔
+				sleepDuration = 100 * time.Millisecond
+			}
+
+			// 限制休眠时间范围
+			if sleepDuration < 20*time.Millisecond {
+				sleepDuration = 20 * time.Millisecond
+			} else if sleepDuration > 1*time.Second {
+				sleepDuration = 1 * time.Second
+			}
+
+			// 每隔5秒重新同步一次播放器时间，避免累积误差
+			if elapsed > 5.0 && int(elapsed)%5 == 0 {
+				actualTime := getCurrentTime()
+				if actualTime > 0 {
+					drift := actualTime - currentTime
+					if abs(drift) > 0.5 { // 如果时间偏差超过0.5秒，重新同步
+						log.Info().
+							Float64("expected_time", currentTime).
+							Float64("actual_time", actualTime).
+							Float64("drift", drift).
+							Msg("Resyncing with player time")
+
+						baseTime = actualTime
+						startTime = time.Now()
+					}
+				}
+			}
+
+			// 休眠到下一次检查
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(sleepDuration):
+				// 继续下一次循环
 			}
 		}
 	}()
+}
+
+// abs 计算浮点数的绝对值
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

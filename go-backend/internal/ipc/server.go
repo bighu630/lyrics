@@ -191,6 +191,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 func (s *Server) Broadcast(lyrics string) {
+	if lyrics != "" {
+		os.WriteFile("/tmp/lyrics", []byte(lyrics+"\n"), 0644)
+	}
 	s.lyricsLock.Lock()
 	s.lyrics = lyrics
 	s.lyricsLock.Unlock()

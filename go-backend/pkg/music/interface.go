@@ -29,3 +29,11 @@ type LyricLine struct {
 	Time float64 // 时间戳（秒）
 	Text string  // 歌词文本
 }
+
+// SongInfo 歌曲信息结构
+type SongInfo struct {
+	Title    string  `json:"title"`
+	Artist   string  `json:"artist"`
+	Duration float64 `json:"duration"` // 歌曲时长（秒）
+	IsSong   bool    `json:"is_song"`
+}
