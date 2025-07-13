@@ -58,7 +58,7 @@ nano ~/.config/lyrics/config.toml
     
     "custom/lyrics": {
         "format": "{}",
-        "exec": "cat /dev/shm/lyrics",
+        "exec": "awk 'NR==1 {for(i=1;i<=length&&i<=30;i++) printf substr($0,i,1)}' /dev/shm/lyrics",
         "interval": 1,
         "on-click": "lyrics-gui",
         "tooltip": true
