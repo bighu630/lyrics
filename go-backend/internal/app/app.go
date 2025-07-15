@@ -90,7 +90,7 @@ func (a *App) updateSongInfo() {
 	a.currentSong = songIdentifier
 	a.mutex.Unlock()
 
-	a.ipcServer.Broadcast(fmt.Sprintf("... Searching for lyrics for %s ...", songIdentifier))
+	a.ipcServer.Broadcast(fmt.Sprintf("%s", songIdentifier))
 
 	// 创建可取消的上下文，确保如果切换歌曲，可以取消未完成的歌词获取
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -99,7 +99,7 @@ func (a *App) updateSongInfo() {
 	lyricsText, err := a.lyricsProvider.GetLyrics(ctx, songIdentifier)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get lyrics")
-		a.ipcServer.Broadcast(fmt.Sprintf("Error getting lyrics: %v", err))
+		a.ipcServer.Broadcast(fmt.Sprintf("没找到: %v", err))
 		return
 	}
 

@@ -68,10 +68,7 @@ func NewProvider(cacheDir, moduleName, url, apiKey string, redisCfg config.Redis
 	}
 	redisClient, err := redis.NewClient(redisCfg.Addr, redisCfg.Password, redisCfg.DB)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Redis client: %w", err)
-	}
-	if err := redisClient.Ping(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to ping Redis: %w", err)
+		log.Error().Err(err).Msg("failed to connect redis")
 	}
 	return &Provider{
 		cacheDir:     cacheDir,

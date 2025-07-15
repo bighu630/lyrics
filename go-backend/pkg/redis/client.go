@@ -15,9 +15,10 @@ type Client struct {
 // NewClient 创建新的Redis客户端
 func NewClient(addr string, password string, db int) (*Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
-		DB:       db,
+		Addr:        addr,
+		Password:    password,
+		DB:          db,
+		DialTimeout: 10 * time.Second,
 	})
 
 	client := &Client{
