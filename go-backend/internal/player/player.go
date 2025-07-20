@@ -1,6 +1,7 @@
 package player
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -111,6 +112,17 @@ func getCurrentSongFromPlayerctl() (string, error) {
 		return "", err
 	}
 	song := strings.TrimSpace(string(output))
+	if len(song) > 2 {
+		cmd = exec.Command("playerctl", "status")
+		output, err := cmd.Output()
+		if err != nil {
+			return "", err
+		}
+		status := strings.TrimSpace(string(output))
+		if status == "Stopped" {
+			return "", errors.New("no song playing")
+		}
+	}
 	log.Debug().Str("song", song).Msg("Playerctl current song")
 	return song, nil
 }

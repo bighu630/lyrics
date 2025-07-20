@@ -7,6 +7,7 @@ import (
 	"go-backend/internal/ipc"
 	"go-backend/internal/lyrics"
 	"go-backend/internal/player"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -38,10 +39,25 @@ type App struct {
 func New(cfg *config.Config) *App {
 	// 设置 zerolog 的全局配置
 	zerolog.TimeFieldFormat = time.RFC3339
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
+	// Create a file writer
+	f, err := os.OpenFile("/tmp/lyrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		panic(fmt.Errorf("error opening file: %w", err))
+	}
+	defer f.Close()
+
+	// Create a console writer
+	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+
+	// Create a multi-writer to write to both file and console
+	mw := io.MultiWriter(f, consoleWriter)
+
+	// Create a zerolog logger with the multi-writer
+	log := zerolog.New(mw).With().Timestamp().Logger()
 
 	// 创建歌词提供商
-	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI.ModuleName, cfg.AI.BaseURL, cfg.AI.APIKey, cfg.Redis)
+	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Redis, cfg.Lrc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create lyrics provider")
 	}

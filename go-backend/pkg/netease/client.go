@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -47,12 +46,12 @@ type Client struct {
 }
 
 // NewClient 创建新的网易云音乐客户端
-func NewClient() *Client {
+func NewClient(cookie string) *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second, // 设置较短的5秒超时
 		},
-		cookie:         os.Getenv("NETEASE_COOKIE"),
+		cookie:         cookie,
 		requestTimeout: 5 * time.Second,
 		maxRetries:     3, // 最多重试3次
 	}

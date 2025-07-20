@@ -49,6 +49,7 @@ type TomlConfig struct {
 		Password string `toml:"password"`
 		DB       int    `toml:"db"`
 	} `toml:"redis"`
+	Lrc LrcProviderConfig `toml:"lrc"`
 }
 
 // AppConfig 应用配置
@@ -72,11 +73,16 @@ type RedisConfig struct {
 	DB       int
 }
 
+type LrcProviderConfig struct {
+	NeteaseCookie string `json:"netease_cookie"`
+}
+
 // Config 主配置结构
 type Config struct {
 	App   AppConfig
 	AI    AIConfig
 	Redis RedisConfig
+	Lrc   LrcProviderConfig
 }
 
 var logger = log.With().Str("component", "config").Logger()
@@ -189,6 +195,7 @@ func Load() *Config {
 	if tomlConfig.Redis.DB != 0 {
 		config.Redis.DB = tomlConfig.Redis.DB
 	}
+	config.Lrc = tomlConfig.Lrc
 
 	// 检查必要的配置
 	if config.AI.APIKey == "" {

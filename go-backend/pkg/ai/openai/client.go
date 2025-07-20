@@ -45,7 +45,7 @@ func (o *openAi) HandleText(msg string) (string, error) {
 	resp, err := o.client.CreateCompletion(o.ctx, openai.CompletionRequest{
 		Model:     o.model,
 		Prompt:    msg,
-		MaxTokens: 200,
+		MaxTokens: 2000,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("could not get response from openai")

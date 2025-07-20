@@ -1,6 +1,7 @@
 # Lyrics Backend Configuration
 # Place this file at ~/.config/lyrics/config.toml
 
+
 [app]
 # Unix socket path for IPC communication between backend and frontend
 socket_path = "/tmp/lyrics_app.sock"
@@ -11,6 +12,9 @@ check_interval = "5s"
 # Directory for caching downloaded lyrics files
 # If not set, defaults to ~/.cache/lyrics or $XDG_CACHE_HOME/lyrics
 cache_dir = ""
+
+[lrc]
+netease_cookie = ""
 
 [ai]
 # AI module to use: "gemini" (for all Gemini models) or "openai" (for OpenAI-compatible APIs)
