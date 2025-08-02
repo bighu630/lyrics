@@ -282,7 +282,6 @@ func (a *App) startLyricScheduler(lrc string, getCurrentTime func() float64) {
 					Float64("current_time", currentTime).
 					Float64("last_lyric_time", lines[len(lines)-1].Time).
 					Msg("Song finished")
-				a.ipcServer.Broadcast("♪ 歌曲结束 ♪")
 				return
 			}
 

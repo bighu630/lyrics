@@ -96,7 +96,7 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 		for i := range maxRetries {
 			rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
 			if err == nil {
-				if len(rawSongInfo) < 30 {
+				if rawSongInfo == "{\"is_song\": false}" {
 					p.redis.SetWithExpiration(ctx, songIdentifier, rawSongInfo, 1*time.Hour)
 				}
 				p.redis.Set(ctx, songIdentifier, rawSongInfo)
