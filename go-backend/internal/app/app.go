@@ -7,7 +7,6 @@ import (
 	"go-backend/internal/ipc"
 	"go-backend/internal/lyrics"
 	"go-backend/internal/player"
-	"io"
 	"os"
 	"sync"
 	"time"
@@ -45,16 +44,15 @@ func New(cfg *config.Config) *App {
 	if err != nil {
 		panic(fmt.Errorf("error opening file: %w", err))
 	}
-	defer f.Close()
 
 	// Create a console writer
 	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
 
-	// Create a multi-writer to write to both file and console
-	mw := io.MultiWriter(f, consoleWriter)
+	// Combine console and file writers
+	multiWriter := zerolog.MultiLevelWriter(consoleWriter, f)
 
-	// Create a zerolog logger with the multi-writer
-	log := zerolog.New(mw).With().Timestamp().Logger()
+	// Set the global logger's output
+	log.Logger = zerolog.New(multiWriter).With().Timestamp().Logger()
 
 	// 创建歌词提供商
 	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Redis, cfg.Lrc)
