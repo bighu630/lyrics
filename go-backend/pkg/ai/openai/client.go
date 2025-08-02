@@ -42,16 +42,21 @@ func (o *openAi) HandleTextWithImg(msg string, imgType string, imgData []byte) (
 }
 
 func (o *openAi) HandleText(msg string) (string, error) {
-	resp, err := o.client.CreateCompletion(o.ctx, openai.CompletionRequest{
-		Model:     o.model,
-		Prompt:    msg,
+	resp, err := o.client.CreateChatCompletion(o.ctx, openai.ChatCompletionRequest{
+		Model: o.model, // "gpt-3.5-turbo" 或 "gpt-4"
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: msg,
+			},
+		},
 		MaxTokens: 2000,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("could not get response from openai")
 		return "", err
 	}
-	result := resp.Choices[0].Text
+	result := resp.Choices[0].Message.Content
 	return result, nil
 }
 
