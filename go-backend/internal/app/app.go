@@ -52,7 +52,7 @@ func New(cfg *config.Config) *App {
 	multiWriter := zerolog.MultiLevelWriter(consoleWriter, f)
 
 	// Set the global logger's output
-	log.Logger = zerolog.New(multiWriter).With().Timestamp().Logger()
+	log.Logger = zerolog.New(multiWriter).With().Timestamp().Caller().Logger()
 
 	// 创建歌词提供商
 	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Redis, cfg.Lrc)

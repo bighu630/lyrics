@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -36,6 +37,7 @@ type TomlConfig struct {
 		SocketPath    string `toml:"socket_path"`
 		CheckInterval string `toml:"check_interval"`
 		CacheDir      string `toml:"cache_dir"`
+		LogLevel      string `toml:"log_level"` // Add LogLevel to TOML config
 	} `toml:"app"`
 
 	AI struct {
@@ -57,6 +59,7 @@ type AppConfig struct {
 	SocketPath    string
 	CheckInterval time.Duration
 	CacheDir      string
+	LogLevel      zerolog.Level // Add LogLevel to AppConfig
 }
 
 // AIConfig AI配置
