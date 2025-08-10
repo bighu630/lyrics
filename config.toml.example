@@ -49,17 +49,6 @@ base_url = ""
 # api_key = "your_custom_key"
 # base_url = "https://your-api-endpoint.com/v1"
 
-# redis可选，用于缓存ai的返回结果
-[redis]
-# Redis server address (host:port)
-addr = "localhost:6379"
-
-# Redis password (leave empty if no password required)
-password = ""
-
-# Redis database number (0-15, default is 0)
-db = 0
-
 # Example configurations:
 
 # For local Redis without password:

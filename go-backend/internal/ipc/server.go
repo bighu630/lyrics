@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"fmt"
+	"go-backend/internal/i3block"
 	"net"
 	"os"
 	"strconv"
@@ -21,13 +22,17 @@ type Server struct {
 	lyricsLock      sync.Mutex
 	lockFile        *os.File
 	lockFilePath    string
+	i3block         *i3block.Controller
 }
 
 func NewServer(socketPath string) *Server {
+	i3 := i3block.NewController()
+	i3.Start()
 	return &Server{
 		socketPath:   socketPath,
 		clientConns:  make(map[net.Conn]struct{}),
 		lockFilePath: socketPath + ".lock",
+		i3block:      i3,
 	}
 }
 
@@ -198,6 +203,7 @@ func (s *Server) Broadcast(lyrics string) {
 		lyrics += "\n"
 	}
 	os.WriteFile("/dev/shm/lyrics", []byte(lyrics), 0644)
+	s.i3block.SendSignal55()
 
 	s.lyricsLock.Lock()
 	s.lyrics = lyrics

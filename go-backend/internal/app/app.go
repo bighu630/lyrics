@@ -55,7 +55,7 @@ func New(cfg *config.Config) *App {
 	log.Logger = zerolog.New(multiWriter).With().Timestamp().Caller().Logger()
 
 	// 创建歌词提供商
-	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Redis, cfg.Lrc)
+	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Lrc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create lyrics provider")
 	}

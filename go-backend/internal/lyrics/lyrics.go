@@ -11,7 +11,7 @@ import (
 	"go-backend/pkg/ai/gemini"
 	"go-backend/pkg/ai/openai"
 	"go-backend/pkg/music"
-	"go-backend/pkg/redis"
+	musiccache "go-backend/pkg/musicCache"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,7 +31,6 @@ type Line struct {
 type Provider struct {
 	cacheDir     string
 	aiClient     ai.AiInterface
-	redis        *redis.Client
 	musicManager *music.Manager
 }
 
@@ -46,7 +45,7 @@ func formatQuerySong(title string) string {
 	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息: {"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。  输入是一个媒体标题，如果标题中包含歌曲信息，请返回符合格式的JSON；否则，返回{"is_song": false}。 请注意，"title" 和 "artist" 必须准确，否则将被视为错误，切记不要任何markdown格式，并将繁体中文转换为简体, 部分参考格式：{"山吹菌 - 【绝美戏腔】少年霜/提糯-非李": title是非李 artist是少年霜}。 媒体标题是：%s`, title)
 }
 
-func NewProvider(cacheDir string, aiCfg config.AIConfig, redisCfg config.RedisConfig, lrcCfg config.LrcProviderConfig) (*Provider, error) {
+func NewProvider(cacheDir string, aiCfg config.AIConfig, lrcCfg config.LrcProviderConfig) (*Provider, error) {
 	musicManager, err := music.CreateDefaultManager(lrcCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create music manager: %w", err)
@@ -59,21 +58,9 @@ func NewProvider(cacheDir string, aiCfg config.AIConfig, redisCfg config.RedisCo
 		aiClient = openai.NewOpenAi(aiCfg.APIKey, aiCfg.ModuleName, aiCfg.BaseURL)
 	}
 
-	if redisCfg.Addr == "" {
-		return &Provider{
-			cacheDir:     cacheDir,
-			aiClient:     aiClient,
-			musicManager: musicManager,
-		}, nil
-	}
-	redisClient, err := redis.NewClient(redisCfg.Addr, redisCfg.Password, redisCfg.DB)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to connect redis")
-	}
 	return &Provider{
 		cacheDir:     cacheDir,
 		aiClient:     aiClient,
-		redis:        redisClient,
 		musicManager: musicManager,
 	}, nil
 }
@@ -85,9 +72,7 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 	var rawSongInfo string
 	var err error
 	const maxRetries = 3
-	if p.redis != nil {
-		rawSongInfo, err = p.redis.Get(ctx, songIdentifier)
-	}
+	rawSongInfo, err = musiccache.GetCache(songIdentifier)
 	if err == nil && rawSongInfo != "" {
 		log.Info().
 			Str("song_identifier", songIdentifier).
@@ -96,10 +81,7 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 		for i := range maxRetries {
 			rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
 			if err == nil {
-				if rawSongInfo == "{\"is_song\": false}" {
-					p.redis.SetWithExpiration(ctx, songIdentifier, rawSongInfo, 1*time.Hour)
-				}
-				p.redis.Set(ctx, songIdentifier, rawSongInfo)
+				musiccache.AddCache(songIdentifier, rawSongInfo)
 				break
 			}
 			log.Warn().
