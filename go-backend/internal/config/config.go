@@ -46,11 +46,6 @@ type TomlConfig struct {
 		BaseURL    string `toml:"base_url"` // for OpenAI
 	} `toml:"ai"`
 
-	Redis struct {
-		Addr     string `toml:"addr"`
-		Password string `toml:"password"`
-		DB       int    `toml:"db"`
-	} `toml:"redis"`
 	Lrc LrcProviderConfig `toml:"lrc"`
 }
 
@@ -69,23 +64,15 @@ type AIConfig struct {
 	BaseURL    string
 }
 
-// RedisConfig Redis配置
-type RedisConfig struct {
-	Addr     string
-	Password string
-	DB       int
-}
-
 type LrcProviderConfig struct {
 	NeteaseCookie string `json:"netease_cookie"`
 }
 
 // Config 主配置结构
 type Config struct {
-	App   AppConfig
-	AI    AIConfig
-	Redis RedisConfig
-	Lrc   LrcProviderConfig
+	App AppConfig
+	AI  AIConfig
+	Lrc LrcProviderConfig
 }
 
 var logger = log.With().Str("component", "config").Logger()
@@ -147,11 +134,6 @@ func Load() *Config {
 			APIKey:     "",
 			BaseURL:    "",
 		},
-		Redis: RedisConfig{
-			Addr:     "localhost:6379",
-			Password: "",
-			DB:       0,
-		},
 	}
 
 	// 从TOML配置中覆盖App设置
@@ -186,18 +168,6 @@ func Load() *Config {
 		config.AI.APIKey = tomlConfig.AI.APIKey
 	}
 
-	// 从TOML配置中覆盖Redis设置
-	if tomlConfig.Redis.Addr != "" {
-		config.Redis.Addr = tomlConfig.Redis.Addr
-	}
-
-	if tomlConfig.Redis.Password != "" {
-		config.Redis.Password = tomlConfig.Redis.Password
-	}
-
-	if tomlConfig.Redis.DB != 0 {
-		config.Redis.DB = tomlConfig.Redis.DB
-	}
 	config.Lrc = tomlConfig.Lrc
 
 	// 检查必要的配置
