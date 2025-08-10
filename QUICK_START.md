@@ -29,6 +29,7 @@ cat > ~/.config/lyrics/config.toml << 'EOF'
 socket_path = "/tmp/lyrics_app.sock"
 check_interval = "5s"
 cache_dir = ""
+log_level = "info"
 
 [ai]
 module_name = "gemini"
@@ -49,20 +50,19 @@ nano ~/.config/lyrics/config.toml
 
 ## 📱 Waybar 配置
 
-
 在 `~/.config/waybar/config` 中添加：
 
 ```json
 {
-    "modules-center": ["custom/lyrics"],
-    
-    "custom/lyrics": {
-        "format": "{}",
-        "exec": "awk 'NR==1 {for(i=1;i<=length&&i<=30;i++) printf substr($0,i,1)}' /dev/shm/lyrics",
-        "interval": 1,
-        "on-click": "lyrics-gui",
-        "tooltip": true
-    }
+  "modules-center": ["custom/lyrics"],
+
+  "custom/lyrics": {
+    "format": "{}",
+    "exec": "awk 'NR==1 {for(i=1;i<=length&&i<=30;i++) printf substr($0,i,1)}' /dev/shm/lyrics",
+    "interval": 1,
+    "on-click": "lyrics-gui",
+    "tooltip": true
+  }
 }
 ```
 
@@ -70,15 +70,19 @@ nano ~/.config/lyrics/config.toml
 
 ```css
 #custom-lyrics {
-    background: linear-gradient(to right, rgba(51, 204, 255, 0.6), rgba(0, 255, 153, 0.7));
-    color: white;
-    padding: 4px 8px;
-    font-size: 14px;
-    border-radius: 10px;
-    font-weight: bold;
-    margin: 0 5px;
-    min-width: 200px;
-    text-align: center;
+  background: linear-gradient(
+    to right,
+    rgba(51, 204, 255, 0.6),
+    rgba(0, 255, 153, 0.7)
+  );
+  color: white;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 10px;
+  font-weight: bold;
+  margin: 0 5px;
+  min-width: 200px;
+  text-align: center;
 }
 ```
 
