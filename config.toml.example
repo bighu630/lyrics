@@ -13,6 +13,8 @@ check_interval = "5s"
 # If not set, defaults to ~/.cache/lyrics or $XDG_CACHE_HOME/lyrics
 cache_dir = ""
 
+log_level = "info"
+
 [lrc]
 netease_cookie = ""
 
@@ -29,8 +31,6 @@ api_key = "your_api_key_here"
 # Base URL for OpenAI-compatible APIs (only needed when module_name = "openai")
 # Leave empty for official OpenAI API, or set to your custom endpoint
 base_url = ""
-
-log_level = "info"
 
 # Example configurations:
 
