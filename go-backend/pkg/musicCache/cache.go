@@ -11,14 +11,19 @@ import (
 )
 
 const (
-	loadCacheFile = "~/.cache/lyrics/musicCache.list"
-	kvFormat      = "%s => %s"
+	kvFormat = "%s => %s"
 )
 
 var cache = sync.Map{}
+var loadCacheFile = ""
 
 func init() {
-	_, err := os.Stat(loadCacheFile)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	loadCacheFile = filepath.Join(homeDir, ".cache", "lyrics", "music_cache.list")
+	_, err = os.Stat(loadCacheFile)
 	switch err {
 	case os.ErrNotExist:
 		dir := filepath.Dir(loadCacheFile)

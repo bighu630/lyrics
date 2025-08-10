@@ -52,7 +52,7 @@ func New(cfg *config.Config) *App {
 	multiWriter := zerolog.MultiLevelWriter(consoleWriter, f)
 
 	// Set the global logger's output
-	log.Logger = zerolog.New(multiWriter).With().Timestamp().Caller().Logger()
+	log.Logger = zerolog.New(multiWriter).With().Timestamp().Caller().Logger().Level(zerolog.Level(cfg.App.ParsedLogLevel))
 
 	// 创建歌词提供商
 	lyricsProvider, err := lyrics.NewProvider(cfg.App.CacheDir, cfg.AI, cfg.Lrc)
@@ -77,7 +77,7 @@ func (a *App) Run() {
 	}
 	defer a.ipcServer.Close()
 
-	ticker := time.NewTicker(a.cfg.App.CheckInterval)
+	ticker := time.NewTicker(a.cfg.App.ParsedCheckInterval)
 	defer ticker.Stop()
 
 	log.Info().Msg("Starting player check loop...")

@@ -241,6 +241,8 @@ check_interval = "5s"
 # Lyrics cache directory (留空使用默认路径)
 cache_dir = ""
 
+log_level = 1
+
 [ai]
 # AI module: "gemini" or "openai"
 module_name = "gemini"

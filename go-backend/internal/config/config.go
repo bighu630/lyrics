@@ -13,6 +13,7 @@ import (
 const (
 	DefaultSocketPath    = "/tmp/lyrics_app.sock"
 	DefaultCheckInterval = 5 * time.Second
+	DefaultLogLevel      = zerolog.InfoLevel
 )
 
 func getDefaultCacheDir() string {
@@ -31,51 +32,100 @@ func getDefaultCacheDir() string {
 	return filepath.Join(homeDir, ".cache", "lyrics")
 }
 
-// TomlConfig TOML配置文件结构
-type TomlConfig struct {
-	App struct {
-		SocketPath    string `toml:"socket_path"`
-		CheckInterval string `toml:"check_interval"`
-		CacheDir      string `toml:"cache_dir"`
-		LogLevel      string `toml:"log_level"` // Add LogLevel to TOML config
-	} `toml:"app"`
-
-	AI struct {
-		ModuleName string `toml:"module_name"`
-		APIKey     string `toml:"api_key"`
-		BaseURL    string `toml:"base_url"` // for OpenAI
-	} `toml:"ai"`
-
-	Lrc LrcProviderConfig `toml:"lrc"`
-}
-
-// AppConfig 应用配置
+// AppConfig 应用配置 - 同时支持TOML解析和运行时使用
 type AppConfig struct {
-	SocketPath    string
-	CheckInterval time.Duration
-	CacheDir      string
-	LogLevel      zerolog.Level // Add LogLevel to AppConfig
+	SocketPath    string `toml:"socket_path"`
+	CheckInterval string `toml:"check_interval"` // TOML中为字符串，解析后转为Duration
+	CacheDir      string `toml:"cache_dir"`
+	LogLevel      string `toml:"log_level"` // TOML中为字符串，解析后转为zerolog.Level
+
+	// 运行时解析后的字段（不在TOML中序列化）
+	ParsedCheckInterval time.Duration `toml:"-"`
+	ParsedLogLevel      zerolog.Level `toml:"-"`
 }
 
 // AIConfig AI配置
 type AIConfig struct {
-	ModuleName string
-	APIKey     string
-	BaseURL    string
+	ModuleName string `toml:"module_name"`
+	APIKey     string `toml:"api_key"`
+	BaseURL    string `toml:"base_url"`
 }
 
+// LrcProviderConfig 歌词提供商配置
 type LrcProviderConfig struct {
-	NeteaseCookie string `json:"netease_cookie"`
+	NeteaseCookie string `toml:"netease_cookie"`
 }
 
-// Config 主配置结构
+// Config 主配置结构 - 直接用于TOML解析
 type Config struct {
-	App AppConfig
-	AI  AIConfig
-	Lrc LrcProviderConfig
+	App AppConfig         `toml:"app"`
+	AI  AIConfig          `toml:"ai"`
+	Lrc LrcProviderConfig `toml:"lrc"`
 }
 
 var logger = log.With().Str("component", "config").Logger()
+
+// parseLogLevel 解析日志级别字符串为zerolog.Level
+func parseLogLevel(level string) zerolog.Level {
+	switch level {
+	case "debug":
+		return zerolog.DebugLevel
+	case "info":
+		return zerolog.InfoLevel
+	case "warn", "warning":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	case "fatal":
+		return zerolog.FatalLevel
+	case "panic":
+		return zerolog.PanicLevel
+	case "disabled":
+		return zerolog.Disabled
+	default:
+		logger.Warn().
+			Str("invalid_level", level).
+			Str("default_level", DefaultLogLevel.String()).
+			Msg("Invalid log level, using default")
+		return DefaultLogLevel
+	}
+}
+
+// PostProcess 处理配置，将字符串转换为相应的类型
+func (c *Config) PostProcess() error {
+	// 解析检查间隔
+	if c.App.CheckInterval != "" {
+		if duration, err := time.ParseDuration(c.App.CheckInterval); err == nil {
+			c.App.ParsedCheckInterval = duration
+		} else {
+			logger.Warn().
+				Str("check_interval", c.App.CheckInterval).
+				Msg("Invalid check_interval format, using default")
+			c.App.ParsedCheckInterval = DefaultCheckInterval
+		}
+	} else {
+		c.App.ParsedCheckInterval = DefaultCheckInterval
+	}
+
+	// 解析日志级别
+	if c.App.LogLevel != "" {
+		c.App.ParsedLogLevel = parseLogLevel(c.App.LogLevel)
+	} else {
+		c.App.ParsedLogLevel = DefaultLogLevel
+	}
+
+	return nil
+}
+
+// GetCheckInterval 获取解析后的检查间隔
+func (c *Config) GetCheckInterval() time.Duration {
+	return c.App.ParsedCheckInterval
+}
+
+// GetLogLevel 获取解析后的日志级别
+func (c *Config) GetLogLevel() zerolog.Level {
+	return c.App.ParsedLogLevel
+}
 
 // getConfigPath 获取配置文件路径
 func getConfigPath() string {
@@ -95,16 +145,16 @@ func getConfigPath() string {
 }
 
 // loadTomlConfig 加载TOML配置文件
-func loadTomlConfig() (*TomlConfig, error) {
+func loadTomlConfig() (*Config, error) {
 	configPath := getConfigPath()
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		logger.Info().Str("config_path", configPath).Msg("Config file not found, using defaults")
-		return &TomlConfig{}, nil
+		return &Config{}, nil
 	}
 
-	var config TomlConfig
+	var config Config
 	if _, err := toml.DecodeFile(configPath, &config); err != nil {
 		return nil, err
 	}
@@ -119,15 +169,16 @@ func Load() *Config {
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to load config file")
 		logger.Info().Msg("Using default configuration")
-		tomlConfig = &TomlConfig{}
+		tomlConfig = &Config{}
 	}
 
 	// 设置默认值
 	config := &Config{
 		App: AppConfig{
 			SocketPath:    DefaultSocketPath,
-			CheckInterval: DefaultCheckInterval,
+			CheckInterval: "5s", // 字符串形式的默认值
 			CacheDir:      getDefaultCacheDir(),
+			LogLevel:      "info", // 字符串形式的默认值
 		},
 		AI: AIConfig{
 			ModuleName: "gemini",
@@ -142,17 +193,15 @@ func Load() *Config {
 	}
 
 	if tomlConfig.App.CheckInterval != "" {
-		if duration, err := time.ParseDuration(tomlConfig.App.CheckInterval); err == nil {
-			config.App.CheckInterval = duration
-		} else {
-			logger.Warn().
-				Str("check_interval", tomlConfig.App.CheckInterval).
-				Msg("Invalid check_interval format, using default")
-		}
+		config.App.CheckInterval = tomlConfig.App.CheckInterval
 	}
 
 	if tomlConfig.App.CacheDir != "" {
 		config.App.CacheDir = tomlConfig.App.CacheDir
+	}
+
+	if tomlConfig.App.LogLevel != "" {
+		config.App.LogLevel = tomlConfig.App.LogLevel
 	}
 
 	// 从TOML配置中覆盖AI设置
@@ -169,6 +218,11 @@ func Load() *Config {
 	}
 
 	config.Lrc = tomlConfig.Lrc
+
+	// 后处理配置（解析字符串为具体类型）
+	if err := config.PostProcess(); err != nil {
+		logger.Error().Err(err).Msg("Failed to post-process config")
+	}
 
 	// 检查必要的配置
 	if config.AI.APIKey == "" {

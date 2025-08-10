@@ -30,6 +30,8 @@ api_key = "your_api_key_here"
 # Leave empty for official OpenAI API, or set to your custom endpoint
 base_url = ""
 
+log_level = "info"
+
 # Example configurations:
 
 # For Gemini AI (recommended):
