@@ -42,7 +42,16 @@ type SongInfo struct {
 }
 
 func formatQuerySong(title string) string {
-	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息: {"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。  输入是一个媒体标题，如果标题中包含歌曲信息，请返回符合格式的JSON；否则，返回{"is_song": false}。 请注意，"title" 和 "artist" 必须准确，否则将被视为错误，切记不要任何markdown格式，并将繁体中文转换为简体, 部分参考格式：{"山吹菌 - 【绝美戏腔】少年霜/提糯-非李": title是非李 artist是少年霜}。 媒体标题是：%s`, title)
+	return fmt.Sprintf(`请精确地按照以下JSON格式提取歌曲信息:
+	输入是一个媒体标题字符串，如果标题中包含歌曲信息，请返回符合格式的JSON；
+	{"is_song": true, "title": "歌曲标题", "artist": "演唱者"}。
+	如果你判读这不是一首歌请返回{"is_song": false}。
+	eg: "山吹菌 - 【绝美戏腔】少年霜/提糯-非李" 返回{is_song: true, title:"非李", artist"少年霜"}。
+
+	!!!请注意，"title" 和 "artist" 必须准确，否则将被视为错误.
+	!!!请注意，如果标题中有繁体字，返回的json中需要转换为简体字.
+
+	输入媒体标题是: %s`, title)
 }
 
 func NewProvider(cacheDir string, aiCfg config.AIConfig, lrcCfg config.LrcProviderConfig) (*Provider, error) {
