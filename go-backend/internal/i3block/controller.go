@@ -2,7 +2,6 @@ package i3block
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -10,6 +9,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Controller manages i3block process monitoring and signal sending
@@ -49,7 +50,7 @@ func (c *Controller) Start() error {
 
 	go c.monitorLoop()
 
-	log.Println("i3block controller started")
+	log.Info().Msg("i3block controller started")
 	return nil
 }
 
@@ -66,7 +67,7 @@ func (c *Controller) Stop() {
 	c.ticker.Stop()
 	c.isRunning = false
 
-	log.Println("i3block controller stopped")
+	log.Info().Msg("i3block controller stopped")
 }
 
 // monitorLoop runs the periodic PID refresh
