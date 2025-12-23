@@ -54,6 +54,19 @@ func formatQuerySong(title string) string {
 	输入媒体标题是: %s`, title)
 }
 
+func extractSongJSON(input string) string {
+	// 1. 拍平（去掉换行和多余空白）
+	flat := strings.ReplaceAll(input, "\n", "")
+	flat = strings.ReplaceAll(flat, "\r", "")
+	flat = strings.ReplaceAll(flat, "\t", "")
+	flat = regexp.MustCompile(`\s+`).ReplaceAllString(flat, " ")
+
+	// 2. 匹配包含 is_song 的 JSON
+	re := regexp.MustCompile(`\{[^{}]*"is_song"\s*:\s*(true|false)[^{}]*\}`)
+
+	return re.FindString(flat)
+}
+
 func NewProvider(cacheDir string, aiCfg config.AIConfig, lrcCfg config.LrcProviderConfig) (*Provider, error) {
 	musicManager, err := music.CreateDefaultManager(lrcCfg)
 	if err != nil {
@@ -90,7 +103,10 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 		for i := range maxRetries {
 			rawSongInfo, err = p.aiClient.HandleText(formatQuerySong(songIdentifier))
 			if err == nil {
-				musiccache.AddCache(songIdentifier, rawSongInfo)
+				rawSongInfo = extractSongJSON(rawSongInfo)
+				if len(rawSongInfo) > 0 {
+					musiccache.AddCache(songIdentifier, rawSongInfo)
+				}
 				break
 			}
 			log.Warn().
@@ -101,6 +117,7 @@ func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string
 			time.Sleep(1 * time.Second) // Wait a bit before retrying
 		}
 	}
+	rawSongInfo = extractSongJSON(rawSongInfo)
 
 	if err != nil {
 		return "", fmt.Errorf("failed to query AI service after %d attempts: %w", maxRetries, err)
