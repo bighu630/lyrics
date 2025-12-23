@@ -90,6 +90,10 @@ func NewProvider(cacheDir string, aiCfg config.AIConfig, lrcCfg config.LrcProvid
 func (p *Provider) GetLyrics(ctx context.Context, songIdentifier string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
+	lenFoSing := player.GetCurrentDuration()
+	if lenFoSing > float64(int(6*time.Minute)) {
+		return "歌曲长度过长", nil
+	}
 
 	var rawSongInfo string
 	var err error
