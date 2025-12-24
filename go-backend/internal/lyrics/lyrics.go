@@ -75,7 +75,7 @@ func NewProvider(cacheDir string, aiCfg config.AIConfig, lrcCfg config.LrcProvid
 	var aiClient ai.AiInterface
 
 	if aiCfg.ModuleName == "gemini" {
-		aiClient = gemini.NewGemini(aiCfg.APIKey, "gemini-2.5-flash-lite")
+		aiClient = gemini.NewGemini(aiCfg.APIKey, "gemini-2.5-flash")
 	} else {
 		aiClient = openai.NewOpenAi(aiCfg.APIKey, aiCfg.ModuleName, aiCfg.BaseURL)
 	}
