@@ -38,7 +38,7 @@ LDFLAGS := `pkg-config --libs gtk4`
 
 .PHONY: all backend gui clean run-backend run-gui install install-user install-backend install-gui install-backend-user install-gui-user uninstall uninstall-user uninstall-backend uninstall-gui uninstall-backend-user uninstall-gui-user help
 
-all: backend gui
+all: clean backend gui
 	@echo "Build complete for all targets."
 
 help:
