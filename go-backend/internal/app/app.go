@@ -89,6 +89,9 @@ func (a *App) Run() {
 
 func (a *App) updateSongInfo() {
 	songIdentifier, err := player.GetCurrentSong()
+	if len(songIdentifier) > 3 && songIdentifier[0:3] == " - " {
+		return
+	}
 	if err != nil {
 		a.ipcServer.Broadcast("No music playing...")
 		return
