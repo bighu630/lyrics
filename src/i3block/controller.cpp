@@ -1,36 +1,16 @@
+#ifndef _WIN32
 #include "i3block/controller.h"
+#include "util/exec.h"
 #include "util/log.h"
 
-#include <array>
 #include <fstream>
-#include <cstdio>
-#include <memory>
-#include <regex>
-#include <signal.h>
 #include <sstream>
+#include <signal.h>
 #include <string>
-#include <sys/types.h>
-#include <unistd.h>
 #include <chrono>
 #include <thread>
 
 namespace lyrics {
-
-// ── Helper: exec command and get output ──
-static std::string exec_cmd(const char* cmd) {
-    std::array<char, 128> buffer;
-    std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
-    if (!pipe) return {};
-    while (fgets(buffer.data(), (int)buffer.size(), pipe.get()) != nullptr) {
-        result += buffer.data();
-    }
-    // Trim trailing whitespace
-    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
-        result.pop_back();
-    }
-    return result;
-}
 
 // ── Constructor / Destructor ──
 I3BlockController::I3BlockController() = default;
@@ -42,10 +22,10 @@ I3BlockController::~I3BlockController() {
 // ── Start / Stop ──
 void I3BlockController::start() {
     if (running_.exchange(true)) return;
-    
+
     // Initial PID refresh
     refresh_pid();
-    
+
     monitor_thread_ = std::thread(&I3BlockController::monitor_loop, this);
     LOG_INFO("i3block controller started");
 }
@@ -60,16 +40,16 @@ void I3BlockController::stop() {
 
 // ── PID Refresh ──
 void I3BlockController::refresh_pid() {
-    std::string out = exec_cmd("pgrep -f i3blocks 2>/dev/null");
+    std::string out = util::exec("pgrep -f i3blocks 2>/dev/null");
     if (out.empty()) {
         refresh_pid_alternative();
         return;
     }
-    
+
     // Take first line
     auto nl = out.find('\n');
     if (nl != std::string::npos) out = out.substr(0, nl);
-    
+
     try {
         int new_pid = std::stoi(out);
         if (new_pid > 0) {
@@ -80,19 +60,18 @@ void I3BlockController::refresh_pid() {
             return;
         }
     } catch (...) {}
-    
+
     pid_.store(-1);
 }
 
 void I3BlockController::refresh_pid_alternative() {
-    std::string out = exec_cmd("ps aux 2>/dev/null");
+    std::string out = util::exec("ps aux 2>/dev/null");
     std::istringstream stream(out);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
-        if (line.find("i3blocks") != std::string::npos && 
+        if (line.find("i3blocks") != std::string::npos &&
             line.find("grep") == std::string::npos) {
-            // Parse PID (second field)
             std::istringstream ls(line);
             std::string field;
             for (int i = 0; i < 2 && ls >> field; ++i);
@@ -108,7 +87,7 @@ void I3BlockController::refresh_pid_alternative() {
             } catch (...) {}
         }
     }
-    
+
     pid_.store(-1);
 }
 
@@ -121,17 +100,16 @@ void I3BlockController::monitor_loop() {
     }
 }
 
-// ── Send Signal 55 ──
+// ── Send Signal 55 (SIGRTMIN+21) ──
 void I3BlockController::send_signal55() {
     int pid = pid_.load();
     if (pid <= 0) {
         LOG_DEBUG("Cannot send signal 55: no i3block PID");
         return;
     }
-    
-    if (kill(pid, SIGRTMIN + 21) != 0) { // Signal 55 = SIGRTMIN+21
+
+    if (kill(pid, SIGRTMIN + 21) != 0) {
         LOG_WARN("Failed to send signal 55 to PID {}: {}", pid, strerror(errno));
-        // Try SIGUSR1 as fallback
         if (kill(pid, SIGUSR1) != 0) {
             LOG_DEBUG("SIGUSR1 also failed: {}", strerror(errno));
         }
@@ -154,3 +132,4 @@ void I3BlockController::write_to_shm(const std::string& text) {
 }
 
 } // namespace lyrics
+#endif

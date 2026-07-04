@@ -51,10 +51,16 @@ else()
 endif()
 
 # System libraries
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTK4 REQUIRED gtk4)
-pkg_check_modules(LIBCURL REQUIRED libcurl)
-pkg_check_modules(DBUS REQUIRED dbus-1)
+find_package(PkgConfig QUIET)
+
+if(WIN32)
+    # Windows: no pkg-config, link Win32 API directly
+    find_package(CURL REQUIRED)
+else()
+    pkg_check_modules(GTK4 REQUIRED gtk4)
+    pkg_check_modules(LIBCURL REQUIRED libcurl)
+    pkg_check_modules(DBUS REQUIRED dbus-1)
+endif()
 
 # ── Source files ─────────────────────────────────────────────────
 
@@ -62,7 +68,6 @@ set(LYRICS_SOURCES
     src/main.cpp
     src/app.cpp
     src/config.cpp
-    src/player_linux.cpp
     src/ai/gemini.cpp
     src/ai/openai.cpp
     src/lyrics/provider.cpp
@@ -72,13 +77,27 @@ set(LYRICS_SOURCES
     src/music/lrclib.cpp
     src/music/netease.cpp
     src/cache/cache.cpp
-    src/ui/gtk_window.cpp
-    src/ui/console_tui.cpp
-    src/tray/tray_linux.cpp
-    src/i3block/controller.cpp
     src/util/http.cpp
     src/util/json.cpp
 )
+
+# Platform-specific sources
+if(WIN32)
+    list(APPEND LYRICS_SOURCES
+        src/player_windows.cpp
+        src/tray/tray_windows.cpp
+        src/ui/console_tui.cpp
+    )
+    # Exclude: player_linux.cpp, tray_linux.cpp, gtk_window.cpp, i3block/controller.cpp
+else()
+    list(APPEND LYRICS_SOURCES
+        src/player_linux.cpp
+        src/ui/gtk_window.cpp
+        src/ui/console_tui.cpp
+        src/tray/tray_linux.cpp
+        src/i3block/controller.cpp
+    )
+endif()
 
 set(LYRICS_HEADERS
     src/app.h
@@ -100,6 +119,7 @@ set(LYRICS_HEADERS
     src/i3block/controller.h
     src/util/http.h
     src/util/json.h
+    src/util/exec.h
     src/util/log.h
 )
 
@@ -107,25 +127,47 @@ set(LYRICS_HEADERS
 
 add_executable(lyrics ${LYRICS_SOURCES} ${LYRICS_HEADERS})
 
-target_include_directories(lyrics PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${GTK4_INCLUDE_DIRS}
-    ${LIBCURL_INCLUDE_DIRS}
-    ${DBUS_INCLUDE_DIRS}
-)
+if(WIN32)
+    target_include_directories(lyrics PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CURL_INCLUDE_DIRS}
+    )
+else()
+    target_include_directories(lyrics PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${GTK4_INCLUDE_DIRS}
+        ${LIBCURL_INCLUDE_DIRS}
+        ${DBUS_INCLUDE_DIRS}
+    )
+endif()
 
-target_link_libraries(lyrics PRIVATE
-    yyjson
-    tomlc99
-    spdlog::spdlog
-    ${GTK4_LIBRARIES}
-    ${LIBCURL_LIBRARIES}
-    ${DBUS_LIBRARIES}
-)
+if(WIN32)
+    target_link_libraries(lyrics PRIVATE
+        yyjson
+        tomlc99
+        spdlog::spdlog
+        CURL::libcurl
+        shell32
+        user32
+        gdi32
+        ole32
+    )
+else()
+    target_link_libraries(lyrics PRIVATE
+        yyjson
+        tomlc99
+        spdlog::spdlog
+        ${GTK4_LIBRARIES}
+        ${LIBCURL_LIBRARIES}
+        ${DBUS_LIBRARIES}
+    )
+endif()
 
-target_compile_options(lyrics PRIVATE
-    -Wall -Wextra -Wpedantic -Wno-unused-parameter
-)
+if(NOT WIN32)
+    target_compile_options(lyrics PRIVATE
+        -Wall -Wextra -Wpedantic -Wno-unused-parameter
+    )
+endif()
 
 # ── Tests ────────────────────────────────────────────────────────
 

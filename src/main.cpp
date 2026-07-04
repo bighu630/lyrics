@@ -10,7 +10,9 @@
 #include "config.h"
 #include "util/log.h"
 
+#ifndef _WIN32
 #include "ui/gui.h"
+#endif
 #include "ui/console_tui.h"
 #include "tray/tray.h"
 
@@ -101,6 +103,7 @@ int main(int argc, char* argv[]) {
     auto app = std::make_unique<lyrics::App>(cfg);
 
     // ── GUI mode ──────────────────────────────────────────────────
+#ifndef _WIN32
     if (args.mode == Mode::GUI) {
         // Start app in background thread
         std::thread app_thread([&app]() {
@@ -131,6 +134,12 @@ int main(int argc, char* argv[]) {
 
         LOG_INFO("GUI mode exited");
     }
+#else
+    if (args.mode == Mode::GUI) {
+        LOG_WARN("GUI mode not supported on Windows, falling back to console mode");
+        // fall through to TUI or console mode
+    }
+#endif
 
     // ── TUI mode ──────────────────────────────────────────────────
     else if (args.mode == Mode::TUI) {

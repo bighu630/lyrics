@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #pragma once
 #include <atomic>
 #include <thread>
@@ -44,3 +45,4 @@ private:
 };
 
 } // namespace lyrics
+#endif

@@ -20,8 +20,15 @@ namespace lyrics {
 inline void init_logger(const std::string& level = "info") {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 
+    std::string log_path;
+#ifdef _WIN32
+    const char* tmp = std::getenv("TEMP");
+    log_path = (tmp ? std::string(tmp) : std::string(".")) + "/lyrics.log";
+#else
+    log_path = "/tmp/lyrics.log";
+#endif
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        "/tmp/lyrics.log", 1024 * 1024 * 5, 3);
+        log_path, 1024 * 1024 * 5, 3);
 
     std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
 

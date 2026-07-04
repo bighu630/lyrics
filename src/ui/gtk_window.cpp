@@ -163,8 +163,19 @@ static void activate_cb(GtkApplication* app, gpointer user_data) {
     g_action_map_add_action(G_ACTION_MAP(win_actions), G_ACTION(quit_action));
     
     gtk_widget_insert_action_group(g_gui.window, "win", G_ACTION_GROUP(win_actions));
-    
-    // Connect right-click to popup menu
+
+    // Right-click gesture to show popup menu
+    auto* gesture = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(gesture), 3);
+    g_signal_connect(gesture, "pressed", G_CALLBACK(+[](GtkGestureClick*, int, double x, double y, gpointer data) {
+        auto* menu_model = static_cast<GMenuModel*>(data);
+        auto* popover = gtk_popover_menu_new_from_model(menu_model);
+        gtk_popover_set_position(GTK_POPOVER(popover), GTK_POS_BOTTOM);
+        gtk_widget_set_parent(GTK_WIDGET(popover), GTK_WIDGET(g_gui.window));
+        gtk_popover_popup(GTK_POPOVER(popover));
+    }), menu_model);
+    gtk_widget_add_controller(g_gui.window, GTK_EVENT_CONTROLLER(gesture));
+
     gtk_widget_set_visible(g_gui.window, true);
     
     g_gui.started.store(true);
@@ -205,7 +216,8 @@ void run_gui(const std::string& title,
     g_signal_connect(quit_action, "activate", G_CALLBACK(on_quit), app);
     g_action_map_add_action(G_ACTION_MAP(app_actions), G_ACTION(quit_action));
     
-    gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", new const char*[]{"<Control>Q", nullptr});
+    static const char* quit_accels[] = {"<Control>Q", nullptr};
+    gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", quit_accels);
     
     int status = g_application_run(G_APPLICATION(app), 0, nullptr);
     g_object_unref(app);

@@ -126,8 +126,30 @@ DBusHandlerResult TrayImpl::handle_sni_method(DBusConnection* c, DBusMessage* ms
         // Handle org.freedesktop.DBus.Properties.Get for StatusNotifierItem
         DBusMessage* reply = dbus_message_new_method_return(msg);
         if (reply) {
-            // Return empty properties
-            dbus_message_append_args(reply, DBUS_TYPE_INVALID);
+            DBusMessageIter iter;
+            dbus_message_iter_init_append(reply, &iter);
+            // Return a valid variant containing an empty string
+            DBusMessageIter variant;
+            dbus_message_iter_open_container(&iter, DBUS_TYPE_VARIANT, "s", &variant);
+            const char* empty = "";
+            dbus_message_iter_append_basic(&variant, DBUS_TYPE_STRING, &empty);
+            dbus_message_iter_close_container(&iter, &variant);
+            dbus_connection_send(conn_, reply, nullptr);
+            dbus_message_unref(reply);
+        }
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (strcmp(method, "GetAll") == 0) {
+        // Handle org.freedesktop.DBus.Properties.GetAll
+        DBusMessage* reply = dbus_message_new_method_return(msg);
+        if (reply) {
+            DBusMessageIter iter;
+            dbus_message_iter_init_append(reply, &iter);
+            // Return empty dict<string,variant>
+            DBusMessageIter dict;
+            dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict);
+            dbus_message_iter_close_container(&iter, &dict);
             dbus_connection_send(conn_, reply, nullptr);
             dbus_message_unref(reply);
         }

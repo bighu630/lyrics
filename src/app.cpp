@@ -33,7 +33,9 @@ void App::run(std::atomic<bool>& stop_flag) {
     }
 
     // Start i3block controller
+#ifndef _WIN32
     i3ctrl_.start();
+#endif
 
     // Initialize playing status
     force_update_playing_status();
@@ -55,7 +57,9 @@ void App::run(std::atomic<bool>& stop_flag) {
     }
 
     scheduler_->stop();
+#ifndef _WIN32
     i3ctrl_.stop();
+#endif
     LOG_INFO("App stopped");
 }
 
@@ -75,10 +79,14 @@ void App::broadcast_lyrics(const std::string& text) {
     }
 
     // 2. Shared memory for Waybar
+#ifndef _WIN32
     i3ctrl_.write_to_shm(output);
+#endif
 
     // 3. i3block signal
+#ifndef _WIN32
     i3ctrl_.send_signal55();
+#endif
 }
 
 void App::check_song(std::atomic<bool>& stop_flag) {
@@ -130,6 +138,7 @@ void App::check_song(std::atomic<bool>& stop_flag) {
 
     // Parse and start scheduler
     auto lines = parse_lrc(lyrics_text);
+    auto line_count = lines.size();
 
     if (lines.empty()) {
         // No parseable LRC lines - broadcast as raw text
@@ -145,7 +154,7 @@ void App::check_song(std::atomic<bool>& stop_flag) {
                           this->broadcast_lyrics(lyric);
                       });
 
-    LOG_INFO("Lyrics scheduler started ({} lines)", lines.size());
+    LOG_INFO("Lyrics scheduler started ({} lines)", line_count);
 }
 
 bool App::get_cached_playing_status() {

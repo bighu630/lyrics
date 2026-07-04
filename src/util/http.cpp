@@ -1,6 +1,8 @@
 #include "util/http.h"
 #include "util/log.h"
 
+#include <thread>
+
 namespace lyrics {
 
 // ── Constructor / Destructor ─────────────────────────────────────
