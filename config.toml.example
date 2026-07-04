@@ -1,11 +1,7 @@
-# Lyrics Backend Configuration
+# Lyrics Display System Configuration
 # Place this file at ~/.config/lyrics/config.toml
 
-
 [app]
-# Unix socket path for IPC communication between backend and frontend
-socket_path = "/tmp/lyrics_app.sock"
-
 # Interval for checking current playing media (e.g., "5s", "10s", "1m")
 check_interval = "5s"
 
@@ -13,14 +9,15 @@ check_interval = "5s"
 # If not set, defaults to ~/.cache/lyrics or $XDG_CACHE_HOME/lyrics
 cache_dir = ""
 
+# Log level: trace, debug, info, warn, error, critical, off
 log_level = "info"
 
 [lrc]
+# Cookie for Netease Cloud Music API (optional)
 netease_cookie = ""
 
 [ai]
 # AI module to use: "gemini" (for all Gemini models) or "openai" (for OpenAI-compatible APIs)
-# Note: For any Gemini series models (gemini-pro, gemini-2.5-flash, etc.), use "gemini"
 module_name = "gemini"
 
 # API key for the selected AI service
@@ -50,23 +47,3 @@ base_url = ""
 # module_name = "openai"
 # api_key = "your_custom_key"
 # base_url = "https://your-api-endpoint.com/v1"
-
-# Example configurations:
-
-# For local Redis without password:
-# [redis]
-# addr = "localhost:6379"
-# password = ""
-# db = 0
-
-# For Redis with password:
-# [redis]
-# addr = "localhost:6379"
-# password = "your_redis_password"
-# db = 0
-
-# For remote Redis server:
-# [redis]
-# addr = "redis.example.com:6379"
-# password = "your_redis_password"
-# db = 1

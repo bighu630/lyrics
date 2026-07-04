@@ -1,2 +1,14 @@
-go-backend/lyrics_cache
 build/
+*.o
+*.obj
+*.so
+*.dylib
+*.a
+lyrics
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+cmake-build-*/
