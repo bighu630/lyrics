@@ -12,3 +12,4 @@ lyrics
 *~
 .DS_Store
 cmake-build-*/
+.worktrees/
