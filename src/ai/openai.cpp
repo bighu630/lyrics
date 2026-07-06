@@ -34,6 +34,9 @@ std::string OpenAIClient::handle_text(const std::string& prompt) {
 
     JsonDoc::set_str(root, doc, "model", model_);
 
+    double temperature_val = 0.3;
+    yyjson_mut_obj_add_real(doc, root, "temperature", temperature_val);
+
     // messages array
     yyjson_mut_val* messages = yyjson_mut_arr(doc);
     yyjson_mut_val* msg_key = yyjson_mut_strcpy(doc, "messages");
