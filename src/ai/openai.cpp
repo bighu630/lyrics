@@ -54,6 +54,7 @@ std::string OpenAIClient::handle_text(const std::string& prompt) {
 
     // Execute request with auth header
     HttpClient client;
+    client.set_timeout(std::chrono::seconds(60));
     client.set_header("Authorization", "Bearer " + api_key_);
     auto resp = client.post_json(url, json_body);
 
