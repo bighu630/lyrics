@@ -109,6 +109,7 @@ void I3BlockController::send_signal55() {
 
     if (kill(pid, SIGRTMIN + 21) != 0) {
         LOG_WARN("Failed to send signal 55 to PID {}: {}", pid, strerror(errno));
+        pid_.store(-1);
         if (kill(pid, SIGUSR1) != 0) {
             LOG_DEBUG("SIGUSR1 also failed: {}", strerror(errno));
         }

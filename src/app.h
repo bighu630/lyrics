@@ -50,6 +50,9 @@ private:
     LyricListener listener_;
     std::mutex listener_mutex_;
 
+    // Flag to skip i3block processing for current song (if i3block not running)
+    std::atomic<bool> skip_i3block_for_song_{false};
+
     // Playing status cache
     bool playing_cache_ = false;
     std::chrono::steady_clock::time_point last_playing_check_;

@@ -76,11 +76,11 @@ void App::broadcast_lyrics(const std::string& text) {
         }
     }
 
-    // 2. Shared memory for Waybar
-    i3ctrl_.write_to_shm(output);
-
-    // 3. i3block signal
-    i3ctrl_.send_signal55();
+    // 2. i3block integration (shared memory + signal)
+    if (!skip_i3block_for_song_) {
+        i3ctrl_.write_to_shm(output);
+        i3ctrl_.send_signal55();
+    }
 }
 
 void App::check_song(std::atomic<bool>& stop_flag) {
@@ -93,6 +93,7 @@ void App::check_song(std::atomic<bool>& stop_flag) {
     }
 
     if (song_identifier.empty()) {
+        skip_i3block_for_song_ = !i3ctrl_.has_pid();
         broadcast_lyrics("No music playing...");
         return;
     }
@@ -106,6 +107,11 @@ void App::check_song(std::atomic<bool>& stop_flag) {
         LOG_INFO("─────────────────────────────────────────────────────");
         LOG_INFO("New song detected: '{}'", song_identifier);
         current_song_ = song_identifier;
+
+        // Check i3block existence once per song
+        skip_i3block_for_song_ = !i3ctrl_.has_pid();
+        LOG_DEBUG("i3block {} for this song",
+                  skip_i3block_for_song_ ? "NOT found, skipping integration" : "found");
     }
 
     // Broadcast the identifier immediately
