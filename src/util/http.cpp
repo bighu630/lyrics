@@ -5,6 +5,8 @@
 
 namespace lyrics {
 
+
+
 // ── Constructor / Destructor ─────────────────────────────────────
 
 HttpClient::HttpClient()

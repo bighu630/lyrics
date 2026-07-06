@@ -1,17 +1,16 @@
 #pragma once
 
-#include <curl/curl.h>
-#include <functional>
-#include <memory>
 #include <string>
 #include <map>
-#include <optional>
+#include <memory>
 #include <chrono>
+
+#include <curl/curl.h>
 
 namespace lyrics {
 
-/// RAII wrapper around libcurl's easy interface.
-/// Provides synchronous HTTP GET and POST with timeout and retry.
+/// HTTP client with retry support.
+/// Uses libcurl for HTTP requests.
 class HttpClient {
 public:
     HttpClient();
@@ -59,12 +58,6 @@ public:
                        const std::string& json_body);
 
 private:
-    struct CURLDeleter {
-        void operator()(CURL* c) const { curl_easy_cleanup(c); }
-    };
-    using CURLPtr = std::unique_ptr<CURL, CURLDeleter>;
-
-    CURLPtr handle_;
     std::string base_url_;
     std::string user_agent_;
     std::string cookie_;
@@ -80,6 +73,13 @@ private:
     Response do_attempt(const std::string& url,
                         const std::string& post_data,
                         const std::string& content_type);
+
+    struct CURLDeleter {
+        void operator()(CURL* c) const { curl_easy_cleanup(c); }
+    };
+    using CURLPtr = std::unique_ptr<CURL, CURLDeleter>;
+
+    CURLPtr handle_;
 
     /// Write callback for curl.
     static size_t write_cb(char* data, size_t size, size_t nmemb, void* userp);

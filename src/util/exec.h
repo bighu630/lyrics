@@ -15,19 +15,9 @@ inline std::string exec(const char* cmd) {
     std::array<char, 128> buffer;
     std::string result;
     // Use a lambda as deleter to avoid -Wignored-attributes with decltype(&pclose)
-    auto deleter = [](FILE* f) { if (f) 
-#ifdef _WIN32
-        _pclose(f);
-#else
-        pclose(f);
-#endif
-    };
+    auto deleter = [](FILE* f) { if (f) pclose(f); };
     std::unique_ptr<FILE, decltype(deleter)> pipe(
-#ifdef _WIN32
-        _popen(cmd, "r"),
-#else
         popen(cmd, "r"),
-#endif
         deleter);
     if (!pipe) {
         return {};

@@ -7,12 +7,8 @@
 #include <thread>
 #include <mutex>
 #include <csignal>
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <sys/ioctl.h>
 #include <unistd.h>
-#endif
 
 namespace lyrics {
 
@@ -25,21 +21,11 @@ static void tui_signal_handler(int) {
 }
 
 static int get_terminal_width() {
-#ifdef _WIN32
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (hConsole == INVALID_HANDLE_VALUE) return 80;
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    if (GetConsoleScreenBufferInfo(hConsole, &csbi)) {
-        return csbi.dwSize.X;
-    }
-    return 80;
-#else
     struct winsize ws{};
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
         return ws.ws_col;
     }
     return 80;
-#endif
 }
 
 void run_console_tui(std::function<void(std::function<void(const std::string&)>)> start_lyrics_listener) {

@@ -3,9 +3,7 @@
 #include "config.h"
 #include "lyrics/provider.h"
 #include "lyrics/scheduler.h"
-#ifndef _WIN32
 #include "i3block/controller.h"
-#endif
 
 #include <atomic>
 #include <chrono>
@@ -42,9 +40,7 @@ private:
     Config config_;
     std::unique_ptr<LyricsProvider> provider_;
     std::unique_ptr<Scheduler> scheduler_;
-#ifndef _WIN32
     I3BlockController i3ctrl_;
-#endif
 
     // Current song state
     std::string current_song_;

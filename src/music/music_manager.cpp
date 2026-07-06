@@ -10,24 +10,28 @@ void MusicManager::add_provider(ProviderType type, const std::string& cookie) {
     case ProviderType::LRCLib: {
         LOG_DEBUG("MusicManager: adding LRCLib provider");
         auto client = std::make_unique<LRCLibClient>();
-        providers_.push_back({
+        providers_.push_back(Provider(
             "LRCLib",
-            [this](const std::string& title, const std::string& artist, double duration) -> std::string {
-                return lrclib_->get_lyrics(title, artist, duration);
-            }
-        });
+            std::function<std::string(const std::string&, const std::string&, double)>(
+                [this](const std::string& title, const std::string& artist, double duration) -> std::string {
+                    return lrclib_->get_lyrics(title, artist, duration);
+                }
+            )
+        ));
         lrclib_ = std::move(client);
         break;
     }
     case ProviderType::Netease: {
         LOG_DEBUG("MusicManager: adding Netease provider");
         auto client = std::make_unique<NeteaseClient>(cookie);
-        providers_.push_back({
+        providers_.push_back(Provider(
             "Netease",
-            [this](const std::string& title, const std::string& artist, double) -> std::string {
-                return netease_->get_lyrics(title, artist);
-            }
-        });
+            std::function<std::string(const std::string&, const std::string&, double)>(
+                [this](const std::string& title, const std::string& artist, double) -> std::string {
+                    return netease_->get_lyrics(title, artist);
+                }
+            )
+        ));
         netease_ = std::move(client);
         break;
     }

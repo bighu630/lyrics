@@ -1,4 +1,3 @@
-#ifndef _WIN32
 #include "i3block/controller.h"
 #include "util/exec.h"
 #include "util/log.h"
@@ -132,4 +131,3 @@ void I3BlockController::write_to_shm(const std::string& text) {
 }
 
 } // namespace lyrics
-#endif

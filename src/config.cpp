@@ -13,13 +13,6 @@ namespace lyrics {
 // ── Default cache dir ────────────────────────────────────────────
 
 std::string Config::default_cache_dir() {
-#ifdef _WIN32
-    const char* localappdata = std::getenv("LOCALAPPDATA");
-    if (localappdata && localappdata[0]) {
-        return std::string(localappdata) + "/lyrics/cache";
-    }
-    return "lyrics_cache";
-#else
     const char* xdg_cache = std::getenv("XDG_CACHE_HOME");
     if (xdg_cache && xdg_cache[0]) {
         return std::string(xdg_cache) + "/lyrics";
@@ -29,7 +22,6 @@ std::string Config::default_cache_dir() {
         return std::string(home) + "/.cache/lyrics";
     }
     return "lyrics_cache";
-#endif
 }
 
 // ── Helper: get string from toml table ───────────────────────────
@@ -46,6 +38,16 @@ static std::string toml_str(toml_table_t* tbl, const char* key) {
     return {};
 }
 
+static bool toml_bool(toml_table_t* tbl, const char* key, bool default_val) {
+    const char* raw = toml_raw_in(tbl, key);
+    if (!raw) return default_val;
+    int val;
+    if (toml_rtob(raw, &val) == 0) {
+        return val != 0;
+    }
+    return default_val;
+}
+
 // ── Parse TOML table into Config ─────────────────────────────────
 
 void Config::parse_toml(toml_table_t* tbl) {
@@ -60,6 +62,8 @@ void Config::parse_toml(toml_table_t* tbl) {
 
         auto ll = toml_str(app_tbl, "log_level");
         if (!ll.empty()) log_level = ll;
+
+        gui = toml_bool(app_tbl, "gui", false);
     }
 
     // [ai]
@@ -73,6 +77,9 @@ void Config::parse_toml(toml_table_t* tbl) {
 
         auto bu = toml_str(ai_tbl, "base_url");
         if (!bu.empty()) ai_base_url = bu;
+
+        auto mn2 = toml_str(ai_tbl, "model_name");
+        if (!mn2.empty()) ai_model_name = mn2;
     }
 
     // [lrc]
@@ -112,15 +119,6 @@ void Config::parse_toml(toml_table_t* tbl) {
 
 Config Config::load() {
     // Determine config file path
-#ifdef _WIN32
-    const char* appdata = std::getenv("APPDATA");
-    std::string config_path;
-    if (appdata && appdata[0]) {
-        config_path = std::string(appdata) + "/lyrics/config.toml";
-    } else {
-        config_path = "config.toml";
-    }
-#else
     const char* xdg_config = std::getenv("XDG_CONFIG_HOME");
     std::string config_path;
     if (xdg_config && xdg_config[0]) {
@@ -133,7 +131,6 @@ Config Config::load() {
             config_path = "config.toml";
         }
     }
-#endif
     return load_from(config_path);
 }
 

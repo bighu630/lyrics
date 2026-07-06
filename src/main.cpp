@@ -10,11 +10,10 @@
 #include "config.h"
 #include "util/log.h"
 
-#ifndef _WIN32
+#ifdef HAS_GUI
 #include "ui/gui.h"
 #endif
 #include "ui/console_tui.h"
-#include "tray/tray.h"
 
 #include <atomic>
 #include <chrono>
@@ -33,33 +32,12 @@ static void signal_handler(int) {
 }
 }
 
-// ── Icon data (16x16 PNG, embedded) ───────────────────────────────
-static std::vector<uint8_t> icon_data() {
-    return {
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10,
-        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x91, 0x68,
-        0x36, 0x00, 0x00, 0x00, 0x01, 0x73, 0x52, 0x47,
-        0x42, 0x00, 0xAE, 0xCE, 0x1C, 0xE9, 0x00, 0x00,
-        0x00, 0x04, 0x67, 0x41, 0x4D, 0x41, 0x00, 0x00,
-        0xB1, 0x8F, 0x0B, 0xFC, 0x61, 0x05, 0x00, 0x00,
-        0x00, 0x09, 0x70, 0x48, 0x59, 0x73, 0x00, 0x00,
-        0x0E, 0xC3, 0x00, 0x00, 0x0E, 0xC3, 0x01, 0xC7,
-        0x6F, 0xA8, 0x64, 0x00, 0x00, 0x00, 0x0C, 0x49,
-        0x44, 0x41, 0x54, 0x38, 0x4F, 0x63, 0x60, 0x60,
-        0x60, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0xBF,
-        0x6F, 0x0D, 0xA2, 0x00, 0x00, 0x00, 0x00, 0x49,
-        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-    };
-}
-
 // ── Mode parsing ──────────────────────────────────────────────────
 
-enum class Mode { GUI, TUI, NoGUI };
+enum class Mode { Unset, GUI, TUI, NoGUI };
 
 struct ParsedArgs {
-    Mode mode = Mode::GUI;
+    Mode mode = Mode::Unset;
     std::vector<std::string> remaining;
 };
 
@@ -88,12 +66,18 @@ int main(int argc, char* argv[]) {
     // Load configuration
     auto cfg = lyrics::Config::load();
 
+    // Resolve mode: CLI args take priority, otherwise use config.gui
+    Mode mode = args.mode;
+    if (mode == Mode::Unset) {
+        mode = cfg.gui ? Mode::GUI : Mode::NoGUI;
+    }
+
     // Initialize logger
     lyrics::init_logger(cfg.log_level);
     LOG_INFO("Lyrics v{} starting (mode: {})",
              1,  // Version placeholder
-             args.mode == Mode::GUI ? "gui" :
-             args.mode == Mode::TUI ? "tui" : "no-gui");
+             mode == Mode::GUI ? "gui" :
+             mode == Mode::TUI ? "tui" : "no-gui");
 
     // Setup signal handlers
     signal(SIGINT, signal_handler);
@@ -103,25 +87,12 @@ int main(int argc, char* argv[]) {
     auto app = std::make_unique<lyrics::App>(cfg);
 
     // ── GUI mode ──────────────────────────────────────────────────
-#ifndef _WIN32
-    if (args.mode == Mode::GUI) {
+#ifdef HAS_GUI
+    if (mode == Mode::GUI) {
         // Start app in background thread
         std::thread app_thread([&app]() {
             app->run(g_stop_flag);
         });
-
-        // Start system tray in background thread
-        std::thread tray_thread([&app]() {
-            std::vector<lyrics::tray::MenuItem> menu_items;
-            // Note: font size actions need to interact with GTK;
-            // we use quit as the primary menu action for now.
-            menu_items.push_back({101, "退出", true, [&app]() {
-                g_stop_flag.store(true);
-            }});
-
-            lyrics::tray::run(std::move(menu_items), icon_data());
-        });
-        tray_thread.detach();
 
         // Run GTK on main thread
         lyrics::run_gui("Lyrics Overlay", [&](auto callback) {
@@ -135,14 +106,14 @@ int main(int argc, char* argv[]) {
         LOG_INFO("GUI mode exited");
     }
 #else
-    if (args.mode == Mode::GUI) {
-        LOG_WARN("GUI mode not supported on Windows, falling back to console mode");
-        // fall through to TUI or console mode
+    if (mode == Mode::GUI) {
+        LOG_WARN("GUI mode not available (no GTK4), falling back to TUI mode");
+        mode = Mode::TUI; // fall through to TUI
     }
 #endif
 
     // ── TUI mode ──────────────────────────────────────────────────
-    else if (args.mode == Mode::TUI) {
+    else if (mode == Mode::TUI) {
         // Start app in background
         std::thread app_thread([&app]() {
             app->run(g_stop_flag);
@@ -163,16 +134,6 @@ int main(int argc, char* argv[]) {
     // ── No-GUI mode ───────────────────────────────────────────────
     else {
         LOG_INFO("Running in headless mode (no GUI/TUI)");
-
-        // Start system tray
-        std::thread tray_thread([&app]() {
-            std::vector<lyrics::tray::MenuItem> menu_items;
-            menu_items.push_back({101, "退出", true, [&app]() {
-                g_stop_flag.store(true);
-            }});
-            lyrics::tray::run(std::move(menu_items), icon_data());
-        });
-        tray_thread.detach();
 
         // Run app on main thread
         app->run(g_stop_flag);

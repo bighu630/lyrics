@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include "music/lrclib.h"
 #include "music/netease.h"
 
@@ -36,6 +37,9 @@ private:
     struct Provider {
         std::string name;
         std::function<std::string(const std::string&, const std::string&, double)> get_lyrics_fn;
+        Provider(std::string n,
+                 std::function<std::string(const std::string&, const std::string&, double)> fn)
+            : name(std::move(n)), get_lyrics_fn(std::move(fn)) {}
     };
     
     std::vector<Provider> providers_;

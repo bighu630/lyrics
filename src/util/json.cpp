@@ -163,8 +163,31 @@ bool JsonDoc::get_bool(yyjson_val* obj, const char* key, bool def) {
 }
 
 yyjson_val* JsonDoc::get_path(yyjson_val* root, const std::string& path) {
-    // Use yyjson_ptr_get which is the non-deprecated replacement
-    return yyjson_ptr_get(root, path.c_str());
+    if (!root || path.empty()) return root;
+
+    // Convert dot/bracket notation to JSON Pointer (RFC 6901).
+    // Examples:
+    //   "choices"                    -> "/choices"
+    //   "choices[0]"                 -> "/choices/0"
+    //   "choices[0].message.content" -> "/choices/0/message/content"
+    std::string pointer;
+    pointer.reserve(path.size() + 1);
+    pointer += '/';
+
+    for (size_t i = 0; i < path.size(); ++i) {
+        char c = path[i];
+        if (c == '.') {
+            pointer += '/';
+        } else if (c == '[') {
+            pointer += '/';
+        } else if (c == ']') {
+            continue;
+        } else {
+            pointer += c;
+        }
+    }
+
+    return yyjson_ptr_get(root, pointer.c_str());
 }
 
 } // namespace lyrics

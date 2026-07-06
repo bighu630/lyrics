@@ -13,10 +13,12 @@ App::App(const Config& cfg)
     : config_(cfg)
     , provider_(std::make_unique<LyricsProvider>(
           cfg.cache_dir, cfg.ai_module_name, cfg.ai_api_key,
-          cfg.ai_base_url, cfg.netease_cookie))
+          cfg.ai_base_url, cfg.ai_model_name, cfg.netease_cookie))
     , scheduler_(std::make_unique<Scheduler>()) {
 
-    LOG_INFO("App created (cache: {}, check_interval: {}s)",
+    LOG_INFO("App created (AI: {}, model: {}, cache: {}, check_interval: {}s)",
+             cfg.ai_module_name,
+             cfg.ai_model_name.empty() ? "(default)" : cfg.ai_model_name,
              cfg.cache_dir, cfg.parsed_check_interval.count());
 }
 
@@ -33,9 +35,7 @@ void App::run(std::atomic<bool>& stop_flag) {
     }
 
     // Start i3block controller
-#ifndef _WIN32
     i3ctrl_.start();
-#endif
 
     // Initialize playing status
     force_update_playing_status();
@@ -57,9 +57,7 @@ void App::run(std::atomic<bool>& stop_flag) {
     }
 
     scheduler_->stop();
-#ifndef _WIN32
     i3ctrl_.stop();
-#endif
     LOG_INFO("App stopped");
 }
 
@@ -79,14 +77,10 @@ void App::broadcast_lyrics(const std::string& text) {
     }
 
     // 2. Shared memory for Waybar
-#ifndef _WIN32
     i3ctrl_.write_to_shm(output);
-#endif
 
     // 3. i3block signal
-#ifndef _WIN32
     i3ctrl_.send_signal55();
-#endif
 }
 
 void App::check_song(std::atomic<bool>& stop_flag) {
