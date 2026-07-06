@@ -95,16 +95,20 @@ static void on_quit(GSimpleAction* action, GVariant* param, gpointer data) {
 static gboolean idle_set_text(gpointer text_ptr) {
     auto* text = static_cast<std::string*>(text_ptr);
     if (g_gui.label) {
-        std::string display;
         if (text->size() > (size_t)kMaxLyricLen) {
-            display = text->substr(0, kMaxLyricLen - 3) + "...";
+            std::string display = text->substr(0, kMaxLyricLen - 3) + "...";
+            // Fix any invalid UTF-8 sequences (e.g. truncated multi-byte chars)
+            char* valid = g_utf8_make_valid(display.c_str(), -1);
+            char* escaped = g_markup_escape_text(valid, -1);
+            gtk_label_set_markup(GTK_LABEL(g_gui.label), escaped);
+            g_free(escaped);
+            g_free(valid);
         } else {
-            display = *text;
+            // No truncation → lyrics are already valid UTF-8
+            char* escaped = g_markup_escape_text(text->c_str(), -1);
+            gtk_label_set_markup(GTK_LABEL(g_gui.label), escaped);
+            g_free(escaped);
         }
-        // Escape for Pango markup
-        char* escaped = g_markup_escape_text(display.c_str(), -1);
-        gtk_label_set_markup(GTK_LABEL(g_gui.label), escaped);
-        g_free(escaped);
     }
     delete text;
     return G_SOURCE_REMOVE;
