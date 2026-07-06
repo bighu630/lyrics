@@ -49,6 +49,7 @@ std::string GeminiClient::handle_text(const std::string& prompt) {
 
     // Execute request
     HttpClient client;
+    client.set_timeout(std::chrono::seconds(60));
     auto resp = client.post_json(url, json_body);
 
     if (!resp.ok()) {
