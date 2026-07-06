@@ -18,7 +18,7 @@ netease_cookie = ""
 
 [ai]
 # AI module to use: "gemini" (for all Gemini models) or "openai" (for OpenAI-compatible APIs)
-module_name = "gemini"
+module_name = "openai"
 
 # API key for the selected AI service
 # For Gemini: Get your key from https://makersuite.google.com/app/apikey
@@ -28,6 +28,9 @@ api_key = "your_api_key_here"
 # Base URL for OpenAI-compatible APIs (only needed when module_name = "openai")
 # Leave empty for official OpenAI API, or set to your custom endpoint
 base_url = ""
+
+# Model name
+model_name = "gpt-5.5"
 
 # Example configurations:
 
