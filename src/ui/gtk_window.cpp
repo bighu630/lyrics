@@ -21,6 +21,7 @@ static struct {
     GtkWidget* label = nullptr;
     int font_size = kDefaultFontSize;
     std::atomic<bool> started{false};
+    GtkApplication* app = nullptr;
 } g_gui;
 
 // ── CSS for transparent glowing text ──
@@ -182,9 +183,22 @@ static void activate_cb(GtkApplication* app, gpointer user_data) {
     LOG_INFO("GTK window created");
 }
 
+// ── Stop flag polling ──
+static gboolean check_stop_flag(gpointer data) {
+    auto* flag = static_cast<std::atomic<bool>*>(data);
+    if (flag->load()) {
+        if (g_gui.app) {
+            g_application_quit(G_APPLICATION(g_gui.app));
+        }
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
+}
+
 // ── Run GUI ──
 void run_gui(const std::string& title,
-             std::function<void(std::function<void(const std::string&)>)> start_lyrics_listener) {
+             std::function<void(std::function<void(const std::string&)>)> start_lyrics_listener,
+             std::atomic<bool>& stop_flag) {
     // Register the lyrics listener BEFORE starting the app
     start_lyrics_listener(set_lyrics);
     
@@ -219,8 +233,12 @@ void run_gui(const std::string& title,
     static const char* quit_accels[] = {"<Control>Q", nullptr};
     gtk_application_set_accels_for_action(GTK_APPLICATION(app), "app.quit", quit_accels);
     
+    g_gui.app = app;
+    g_timeout_add(200, check_stop_flag, &stop_flag);
+    
     int status = g_application_run(G_APPLICATION(app), 0, nullptr);
     g_object_unref(app);
+    g_gui.app = nullptr;
     
     LOG_INFO("GTK application exited with status {}", status);
 }

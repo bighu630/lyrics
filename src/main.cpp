@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
         // Run GTK on main thread
         lyrics::run_gui("Lyrics Overlay", [&](auto callback) {
             app->set_lyric_listener(callback);
-        });
+        }, g_stop_flag);
 
         // GTK exited, signal app to stop
         g_stop_flag.store(true);
@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
         // Run TUI on main thread
         lyrics::run_console_tui([&](auto callback) {
             app->set_lyric_listener(callback);
-        });
+        }, g_stop_flag);
 
         // TUI exited
         g_stop_flag.store(true);

@@ -1,4 +1,3 @@
-#include "ui/gui.h"  // for run_tui declaration
 #include "ui/console_tui.h"
 #include "util/log.h"
 
@@ -6,19 +5,10 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
-#include <csignal>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace lyrics {
-
-static std::atomic<bool> g_tui_running{true};
-
-extern "C" {
-static void tui_signal_handler(int) {
-    g_tui_running.store(false);
-}
-}
 
 static int get_terminal_width() {
     struct winsize ws{};
@@ -28,10 +18,8 @@ static int get_terminal_width() {
     return 80;
 }
 
-void run_console_tui(std::function<void(std::function<void(const std::string&)>)> start_lyrics_listener) {
-    // Setup signal handler
-    signal(SIGINT, tui_signal_handler);
-    signal(SIGTERM, tui_signal_handler);
+void run_console_tui(std::function<void(std::function<void(const std::string&)>)> start_lyrics_listener,
+                     std::atomic<bool>& stop_flag) {
     
     std::string current_lyric;
     std::mutex lyric_mutex;
@@ -51,7 +39,7 @@ void run_console_tui(std::function<void(std::function<void(const std::string&)>)
     std::cout << "Lyrics Client starting (Console Mode)..." << std::endl;
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
     
-    while (g_tui_running.load()) {
+    while (!stop_flag.load()) {
         std::string display;
         {
             std::lock_guard<std::mutex> lock(lyric_mutex);

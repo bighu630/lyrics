@@ -34,6 +34,7 @@ void Cache::load_ai_cache() {
 
     std::string line;
     int loaded = 0;
+    int filtered = 0;
     while (std::getline(ifs, line)) {
         if (line.empty()) continue;
         // Parse JSON: {"key": "...", "value": "..."}
@@ -42,13 +43,42 @@ void Cache::load_ai_cache() {
         yyjson_val* root = doc.root();
         std::string key = JsonDoc::get_str(root, "key");
         std::string val = JsonDoc::get_str(root, "value");
-        if (!key.empty() && !val.empty()) {
-            ai_cache_[key] = val;
-            loaded++;
+        if (key.empty() || val.empty()) {
+            filtered++;
+            continue;
         }
+        // Parse the inner value JSON to check is_song
+        JsonDoc val_doc(val);
+        if (!val_doc.valid() || !val_doc.root()) {
+            filtered++;
+            continue;
+        }
+        yyjson_val* val_root = val_doc.root();
+        bool is_song = JsonDoc::get_bool(val_root, "is_song", false);
+        if (!is_song) {
+            filtered++;
+            continue;
+        }
+        ai_cache_[key] = val;
+        loaded++;
     }
 
-    LOG_DEBUG("Loaded {} AI cache entries from '{}'", loaded, ai_cache_file_);
+    LOG_DEBUG("Loaded {} AI cache entries from '{}' (filtered out {})", loaded, ai_cache_file_, filtered);
+
+    // If we filtered entries out, rewrite the file with only valid entries
+    if (filtered > 0) {
+        std::ofstream ofs(ai_cache_file_, std::ios::trunc);
+        if (ofs) {
+            for (auto& [k, v] : ai_cache_) {
+                JsonDoc entry = JsonDoc::make_object();
+                yyjson_mut_doc* md = entry.doc_mut();
+                yyjson_mut_val* mr = entry.root_mut();
+                JsonDoc::set_str(mr, md, "key", k);
+                JsonDoc::set_str(mr, md, "value", v);
+                ofs << entry.to_string() << "\n";
+            }
+        }
+    }
 }
 
 void Cache::append_ai_cache(const std::string& key, const std::string& value) {
