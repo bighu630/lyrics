@@ -105,7 +105,10 @@ cd lyrics
 # 2. 构建
 make
 
-# 3. （可选）安装到 ~/.local/bin/
+# 3. 配置
+-- 复制配置文件到 ~/.config/lyrics/config.toml
+
+# 4. （可选）安装到 ~/.local/bin/
 make install-user
 </code></pre>
 
