@@ -19,9 +19,6 @@ public:
     /// Stop monitoring.
     void stop();
     
-    /// Check if a valid i3block PID is currently known.
-    bool has_pid() const { return pid_.load() > 0; }
-
     /// Send signal 55 to i3block process to trigger a refresh.
     void send_signal55();
     

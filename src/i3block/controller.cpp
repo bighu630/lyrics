@@ -101,6 +101,8 @@ void I3BlockController::monitor_loop() {
 
 // ── Send Signal 55 (SIGRTMIN+21) ──
 void I3BlockController::send_signal55() {
+    // Snapshot PID into local copy so the PID doesn't change mid-flight
+    // (monitor thread could refresh pid_ between the two kill() calls).
     int pid = pid_.load();
     if (pid <= 0) {
         LOG_DEBUG("Cannot send signal 55: no i3block PID");
@@ -109,8 +111,9 @@ void I3BlockController::send_signal55() {
 
     if (kill(pid, SIGRTMIN + 21) != 0) {
         LOG_WARN("Failed to send signal 55 to PID {}: {}", pid, strerror(errno));
-        pid_.store(-1);
+        // Fallback to SIGUSR1; only invalidate PID if both signals fail
         if (kill(pid, SIGUSR1) != 0) {
+            pid_.store(-1);
             LOG_DEBUG("SIGUSR1 also failed: {}", strerror(errno));
         }
     } else {

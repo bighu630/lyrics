@@ -76,11 +76,11 @@ void App::broadcast_lyrics(const std::string& text) {
         }
     }
 
-    // 2. i3block integration (shared memory + signal)
-    if (i3ctrl_.has_pid()) {
-        i3ctrl_.write_to_shm(output);
-        i3ctrl_.send_signal55();
-    }
+    // 2. Shared memory — always write (for Waybar/TUI direct read)
+    i3ctrl_.write_to_shm(output);
+
+    // 3. i3block signal — send if i3block is running (send_signal55 checks pid internally)
+    i3ctrl_.send_signal55();
 }
 
 void App::check_song(std::atomic<bool>& stop_flag) {
