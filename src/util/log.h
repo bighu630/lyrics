@@ -37,6 +37,8 @@ inline void init_logger(const std::string& level = "info") {
     else if (level == "critical")logger->set_level(spdlog::level::critical);
     else                         logger->set_level(spdlog::level::info);
 
+    logger->flush_on(spdlog::level::trace);
+
     spdlog::set_default_logger(logger);
     spdlog::set_level(logger->level());
 }
