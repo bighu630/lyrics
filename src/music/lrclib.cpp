@@ -11,7 +11,7 @@ namespace lyrics {
 
 LRCLibClient::LRCLibClient() {
     http_.set_base_url("https://lrclib.net/api");
-    http_.set_timeout(std::chrono::seconds(10));
+    http_.set_timeout(std::chrono::seconds(30));
     http_.set_user_agent("lyrics-cpp/1.0");
 }
 
@@ -37,14 +37,14 @@ std::string LRCLibClient::get_lyrics(const std::string& title,
         return {};
     }
     if (resp.body == "[]"){
-    auto resp = http_.get("/search", {{"track_name", title}});
+        LOG_DEBUG("LRCLib: searching for title='{}'", title);
+        auto resp = http_.get("/search", {{"track_name", title}});
 
-    if (!resp.ok()) {
-        LOG_WARN("LRCLib search failed: status={} error={}",
-                 resp.status_code, resp.error);
-        return {};
-    }
-
+        if (!resp.ok()) {
+            LOG_WARN("LRCLib search failed: status={} error={}",
+                    resp.status_code, resp.error);
+            return {};
+        }
     }
 
     int target_duration = static_cast<int>(duration);
@@ -92,7 +92,11 @@ std::string LRCLibClient::find_best_match(const std::string& json_response,
 
         std::string trackName = JsonDoc::get_str(item, "trackName");
         std::string artistName = JsonDoc::get_str(item, "artistName");
+        std::string syncedLyrics = JsonDoc::get_str(item, "syncedLyrics");
         int itemDuration = static_cast<int>(JsonDoc::get_int(item, "duration", 0));
+        if (syncedLyrics.empty()) {
+            continue;
+        }
 
         // Score the match:
         //   3 = exact title + exact artist
