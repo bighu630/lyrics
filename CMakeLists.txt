@@ -70,6 +70,7 @@ set(LYRICS_SOURCES
     src/lyrics/scheduler.cpp
     src/music/music_manager.cpp
     src/music/lrclib.cpp
+    src/music/lrcmux.cpp
     src/music/netease.cpp
     src/cache/cache.cpp
     src/util/http.cpp
@@ -93,6 +94,7 @@ set(LYRICS_HEADERS
     src/lyrics/scheduler.h
     src/music/music_manager.h
     src/music/lrclib.h
+    src/music/lrcmux.h
     src/music/netease.h
     src/cache/cache.h
     src/ui/gui.h

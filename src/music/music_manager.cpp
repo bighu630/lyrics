@@ -7,6 +7,20 @@ MusicManager::MusicManager() {}
 
 void MusicManager::add_provider(ProviderType type, const std::string& cookie) {
     switch (type) {
+    case ProviderType::Lrcmux: {
+        LOG_DEBUG("MusicManager: adding Lrcmux provider");
+        auto client = std::make_unique<LrcmuxClient>();
+        providers_.push_back(Provider(
+            "Lrcmux",
+            std::function<std::string(const std::string&, const std::string&, double)>(
+                [this](const std::string& title, const std::string& artist, double duration) -> std::string {
+                    return lrcmux_->get_lyrics(title, artist, duration);
+                }
+            )
+        ));
+        lrcmux_ = std::move(client);
+        break;
+    }
     case ProviderType::LRCLib: {
         LOG_DEBUG("MusicManager: adding LRCLib provider");
         auto client = std::make_unique<LRCLibClient>();

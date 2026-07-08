@@ -4,6 +4,7 @@
 #include <memory>
 #include <functional>
 #include "music/lrclib.h"
+#include "music/lrcmux.h"
 #include "music/netease.h"
 
 namespace lyrics {
@@ -14,6 +15,7 @@ class MusicManager {
 public:
     /// Provider type enum
     enum class ProviderType {
+        Lrcmux,
         LRCLib,
         Netease
     };
@@ -45,6 +47,7 @@ private:
     std::vector<Provider> providers_;
     
     // Provider instances
+    std::unique_ptr<LrcmuxClient> lrcmux_;
     std::unique_ptr<LRCLibClient> lrclib_;
     std::unique_ptr<NeteaseClient> netease_;
 };
