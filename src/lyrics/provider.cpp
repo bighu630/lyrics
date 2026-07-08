@@ -39,8 +39,8 @@ LyricsProvider::LyricsProvider(const std::string& cache_dir,
 
     // Create MusicManager and register providers
     music_mgr_ = std::make_unique<MusicManager>();
-    music_mgr_->add_provider(MusicManager::ProviderType::Lrcmux);
     music_mgr_->add_provider(MusicManager::ProviderType::LRCLib);
+    music_mgr_->add_provider(MusicManager::ProviderType::Lrcmux);
     music_mgr_->add_provider(MusicManager::ProviderType::Netease, netease_cookie);
 
     LOG_INFO("LyricsProvider initialized (AI: {}, model: {}, providers: {}, cache: {})",

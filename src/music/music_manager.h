@@ -15,8 +15,8 @@ class MusicManager {
 public:
     /// Provider type enum
     enum class ProviderType {
-        Lrcmux,
         LRCLib,
+        Lrcmux,
         Netease
     };
     
