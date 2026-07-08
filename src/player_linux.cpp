@@ -52,10 +52,13 @@ static bool mpc_parse_time(const std::string& status, double& current, double& t
 // ── Playerctl helpers ────────────────────────────────────────────
 
 static std::string playerctl_current_song() {
-    std::string song = util::exec("playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null");
-    if (song.empty()) return {};
     std::string status = util::exec("playerctl status 2>/dev/null");
-    if (status == "Stopped") return {};
+    // Only return metadata for active playback states.
+    // "Playing" and "Paused" both have valid metadata;
+    // "Stopped" returns stale data. Track-switch while paused
+    // is handled by App::check_song() playing-state detection.
+    if (status != "Playing" && status != "Paused") return {};
+    std::string song = util::exec("playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null");
     return song;
 }
 
@@ -98,7 +101,7 @@ std::string get_current_song() {
 
 double get_current_play_time() {
     std::string status = mpc_status();
-    if (status == "playing" || status == "paused") {
+    if (status == "playing") {
         std::string full = util::exec("mpc status 2>/dev/null");
         double cur = 0, total = 0;
         if (mpc_parse_time(full, cur, total)) {
@@ -114,7 +117,7 @@ double get_current_play_time() {
 
 double get_current_duration() {
     std::string status = mpc_status();
-    if (status == "playing" || status == "paused") {
+    if (status == "playing") {
         std::string full = util::exec("mpc status 2>/dev/null");
         double cur = 0, total = 0;
         if (mpc_parse_time(full, cur, total)) {

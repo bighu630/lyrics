@@ -1,10 +1,8 @@
 #include "lyrics/scheduler.h"
-#include "player.h"
 #include "util/log.h"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
+#include <utility>
 
 namespace lyrics {
 
@@ -61,17 +59,14 @@ int Scheduler::find_index_at_time(const std::vector<LyricLine>& lines, double t)
 
 void Scheduler::run(TimeProvider get_time, LyricCallback callback) {
     int last_index = -2; // Different from -1 to ensure first broadcast
-    double base_time = get_time();
-    auto start_time = std::chrono::steady_clock::now();
-    bool was_playing = player::is_playing();
 
-    LOG_INFO("Scheduler started with {} lines, base_time={}s", lines_.size(), base_time);
+    LOG_INFO("Scheduler started with {} lines", lines_.size());
 
     while (!stop_requested_.load()) {
-        // Calculate current playback time: base + elapsed
-        auto now = std::chrono::steady_clock::now();
-        double elapsed = std::chrono::duration<double>(now - start_time).count();
-        double current_time = base_time + elapsed;
+        // Use get_time() directly as the primary time source.
+        // During pause, get_time() returns the paused position (time stops advancing),
+        // so lyrics naturally stay on the current line without any special pause handling.
+        double current_time = get_time();
 
         // Lookup time with advance shift
         double lookup_time = current_time + kTimeShift;
@@ -118,21 +113,6 @@ void Scheduler::run(TimeProvider get_time, LyricCallback callback) {
         if (sleep_duration < kMinSleep) sleep_duration = kMinSleep;
         if (sleep_duration > kMaxSleep) sleep_duration = kMaxSleep;
 
-        // Every kResyncInterval seconds, resync with actual player time
-        if (elapsed > kResyncInterval && std::fmod(elapsed, kResyncInterval) < sleep_duration + 0.1) {
-            double actual_time = get_time();
-            if (actual_time > 0) {
-                double drift = actual_time - current_time;
-                if (std::abs(drift) > 0.5) {
-                    LOG_INFO("Resyncing: drift={:.3f}s, base={:.3f} -> {:.3f}", drift, base_time, actual_time);
-                    base_time = actual_time;
-                    start_time = std::chrono::steady_clock::now();
-                    // Recalculate current_time after resync
-                    current_time = actual_time;
-                }
-            }
-        }
-
         // Sleep (with cancellation check)
         if (sleep_duration > 0) {
             // Break sleep into smaller chunks for responsive cancellation
@@ -143,28 +123,6 @@ void Scheduler::run(TimeProvider get_time, LyricCallback callback) {
                 std::this_thread::sleep_for(std::chrono::duration<double>(sleep_for));
                 remaining -= sleep_for;
             }
-        }
-
-        // Check player status periodically
-        if (elapsed > 0 && std::fmod(elapsed, 3.0) < 0.1) {
-            bool now_playing = player::is_playing();
-            if (was_playing && !now_playing) {
-                // Just paused - wait for resume
-                LOG_INFO("Player paused, waiting...");
-                bool resumed = false;
-                while (!stop_requested_.load() && !resumed) {
-                    std::this_thread::sleep_for(std::chrono::seconds(3));
-                    if (player::is_playing()) {
-                        LOG_INFO("Player resumed, resyncing");
-                        base_time = get_time();
-                        start_time = std::chrono::steady_clock::now();
-                        was_playing = true;
-                        resumed = true;
-                    }
-                }
-                if (resumed) continue;
-            }
-            was_playing = now_playing;
         }
     }
 

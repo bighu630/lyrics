@@ -93,8 +93,24 @@ void App::check_song(std::atomic<bool>& stop_flag) {
     }
 
     if (song_identifier.empty()) {
+        {
+            std::lock_guard<std::mutex> lock(song_mutex_);
+            current_song_.clear();
+        }
         broadcast_lyrics("No music playing...");
         return;
+    }
+
+    // Bug 2: Track playing state to detect stale metadata when resuming from pause
+    static bool was_playing = true;
+    bool now_playing = player::is_playing();
+    bool just_resumed = !was_playing && now_playing;
+    was_playing = now_playing;
+
+    if (just_resumed && !current_song_.empty()) {
+        LOG_INFO("Player resumed, forcing song re-check (handles stale metadata)");
+        std::lock_guard<std::mutex> lock(song_mutex_);
+        current_song_.clear();
     }
 
     // Check if song changed

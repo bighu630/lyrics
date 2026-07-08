@@ -16,12 +16,11 @@ using LyricCallback = std::function<void(const std::string&)>;
 
 /// Lyrics scheduler that synchronizes LRC lines with playback position.
 ///
-/// - Uses a base time + elapsed approach for smooth timing
+/// - Uses player time provider directly for accurate timing
 /// - Binary search for current lyric line
 /// - 0.1s advance display
 /// - Intelligent sleep between checks
-/// - Resyncs every 5 seconds
-/// - Handles pause/resume
+/// - Naturally handles pause/resume via time provider
 class Scheduler {
 public:
     using TimeProvider = std::function<double()>;
@@ -45,10 +44,9 @@ public:
 
 private:
     static constexpr double kTimeShift = 0.1;     // Seconds to show lyric early
-    static constexpr double kResyncInterval = 5.0; // Seconds between resyncs
     static constexpr double kSongEndMargin = 5.0;  // Seconds after last line to stop
     static constexpr double kMinSleep = 0.02;      // 20ms minimum sleep
-    static constexpr double kMaxSleep = 1.0;       // 1s maximum sleep
+    static constexpr double kMaxSleep = 0.2;       // 200ms maximum sleep (poll get_time frequently)
 
     std::vector<LyricLine> lines_;
     std::thread thread_;
