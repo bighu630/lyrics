@@ -36,6 +36,16 @@ std::string LRCLibClient::get_lyrics(const std::string& title,
                  resp.status_code, resp.error);
         return {};
     }
+    if (resp.body == "[]"){
+    auto resp = http_.get("/search", {{"track_name", title}});
+
+    if (!resp.ok()) {
+        LOG_WARN("LRCLib search failed: status={} error={}",
+                 resp.status_code, resp.error);
+        return {};
+    }
+
+    }
 
     int target_duration = static_cast<int>(duration);
     return find_best_match(resp.body, title, artist, target_duration);
